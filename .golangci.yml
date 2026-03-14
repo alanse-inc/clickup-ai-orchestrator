@@ -16,18 +16,13 @@ linters:
     - prealloc
     - unconvert
     - unparam
+  settings:
+    gocognit:
+      min-complexity: 20
+    goconst:
+      min-len: 3
+      min-occurrences: 3
 
 formatters:
   enable:
     - gofumpt
-
-linters-settings:
-  gocognit:
-    min-complexity: 20
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-issues:
-  exclude-dirs:
-    - vendor

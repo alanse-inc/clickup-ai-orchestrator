@@ -3,7 +3,12 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "go fmt ./... && go vet ./..."
+        "hooks": [
+          {
+            "type": "command",
+            "command": "go fmt ./... && go vet ./..."
+          }
+        ]
       }
     ]
   }

@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "go fmt ./... && go vet ./..."
+      }
+    ]
+  }
+}

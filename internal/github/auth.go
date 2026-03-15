@@ -109,15 +109,16 @@ func parseRSAPrivateKey(block *pem.Block) (*rsa.PrivateKey, error) {
 
 // SetAuth はキャッシュされた installation token を使い Bearer ヘッダーを設定する。
 // トークンが未取得または期限切れの場合は自動で取得・リフレッシュする。
+// ロックはリフレッシュ中も保持する。トークン更新は1時間に1回程度であり、
+// オーケストレータは単一ポーリングループのため並行ブロックの影響は軽微。
 func (a *GitHubAppAuthenticator) SetAuth(req *http.Request) {
 	a.mu.Lock()
-	needsRefresh := a.token == "" || time.Now().After(a.expiresAt.Add(-tokenRefreshMargin))
-	cachedToken := a.token
-	cachedExpiry := a.expiresAt
-	a.mu.Unlock()
+	defer a.mu.Unlock()
 
-	if needsRefresh {
-		if err := a.refreshToken(); err != nil {
+	if a.token == "" || time.Now().After(a.expiresAt.Add(-tokenRefreshMargin)) {
+		cachedToken := a.token
+		cachedExpiry := a.expiresAt
+		if err := a.refreshToken(req.Context()); err != nil {
 			slog.Error("failed to refresh installation token", "error", err)
 			// リフレッシュ失敗でも既存トークンがまだ有効ならフォールバック
 			if cachedToken != "" && time.Now().Before(cachedExpiry) {
@@ -127,20 +128,17 @@ func (a *GitHubAppAuthenticator) SetAuth(req *http.Request) {
 		}
 	}
 
-	a.mu.Lock()
-	token := a.token
-	a.mu.Unlock()
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+a.token)
 }
 
-func (a *GitHubAppAuthenticator) refreshToken() error {
+func (a *GitHubAppAuthenticator) refreshToken(parentCtx context.Context) error {
 	jwtToken, err := a.generateJWT()
 	if err != nil {
 		return fmt.Errorf("generating JWT: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", a.baseURL, a.installationID)
-	ctx, cancel := context.WithTimeout(context.Background(), installTokenTimeout)
+	ctx, cancel := context.WithTimeout(parentCtx, installTokenTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
@@ -165,10 +163,8 @@ func (a *GitHubAppAuthenticator) refreshToken() error {
 		return fmt.Errorf("decoding response: %w", err)
 	}
 
-	a.mu.Lock()
 	a.token = tokenResp.Token
 	a.expiresAt = tokenResp.ExpiresAt
-	a.mu.Unlock()
 	return nil
 }
 

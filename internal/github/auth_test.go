@@ -42,8 +42,12 @@ func marshalPrivateKeyPEM(key *rsa.PrivateKey) []byte {
 	})
 }
 
-func marshalPKCS8PEM(key *rsa.PrivateKey) []byte {
-	pkcs8Bytes, _ := x509.MarshalPKCS8PrivateKey(key)
+func marshalPKCS8PEM(t *testing.T, key *rsa.PrivateKey) []byte {
+	t.Helper()
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("failed to marshal PKCS#8 key: %v", err)
+	}
 	return pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: pkcs8Bytes,
@@ -53,7 +57,7 @@ func marshalPKCS8PEM(key *rsa.PrivateKey) []byte {
 func TestNewGitHubAppAuthenticator(t *testing.T) {
 	key := generateTestPrivateKey(t)
 	pemBytes := marshalPrivateKeyPEM(key)
-	pkcs8PEM := marshalPKCS8PEM(key)
+	pkcs8PEM := marshalPKCS8PEM(t, key)
 
 	tests := []struct {
 		name        string

@@ -1,0 +1,113 @@
+name: AI Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'ClickUp Task ID'
+        required: true
+        type: string
+      phase:
+        description: 'SPEC or CODE'
+        required: true
+        type: string
+      status_on_success:
+        description: 'ClickUp status to set on success'
+        required: true
+        type: string
+      status_on_error:
+        description: 'ClickUp status to revert on error'
+        required: true
+        type: string
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Fetch ClickUp task
+        id: fetch_task
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          TASK_ID: ${{ inputs.task_id }}
+        run: |
+          RESPONSE=$(curl -fsS "https://api.clickup.com/api/v2/task/${TASK_ID}" \
+            -H "Authorization: ${CLICKUP_API_TOKEN}")
+          echo "task_name=$(echo "$RESPONSE" | jq -r '.name')" >> "$GITHUB_OUTPUT"
+          DELIMITER="CLICKUP_DESC_$(openssl rand -hex 8)"
+          echo "task_description<<${DELIMITER}" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE" | jq -r '.description // ""' >> "$GITHUB_OUTPUT"
+          echo "${DELIMITER}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code (SPEC)
+        if: inputs.phase == 'SPEC'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            以下の ClickUp タスクの内容をもとに、実装仕様書を Markdown で作成してください。
+            リポジトリの既存コードを読み込み、現在のアーキテクチャ・コーディングスタイルを踏まえて仕様を作成してください。
+
+            タスク名: ${{ steps.fetch_task.outputs.task_name }}
+            タスク内容:
+            ${{ steps.fetch_task.outputs.task_description }}
+
+            仕様書には以下を含めてください:
+            - 変更の概要
+            - 影響を受けるファイル
+            - 実装方針
+            - テスト方針
+            - 考慮事項・リスク
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Claude Code (CODE)
+        if: inputs.phase == 'CODE'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            以下の仕様に基づいてコードを実装し、PR を作成してください。
+
+            タスク名: ${{ steps.fetch_task.outputs.task_name }}
+            仕様:
+            ${{ steps.fetch_task.outputs.task_description }}
+
+            実装手順:
+            1. feature/clickup-${{ inputs.task_id }} ブランチを作成
+            2. 仕様に基づいてコードを変更
+            3. テストを実行して通ることを確認
+            4. コミット＆Push
+            5. gh pr create で PR を作成
+
+            コーディング規約は CLAUDE.md を参照してください。
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # TODO: SPEC フェーズの場合、Claude Code の出力（仕様書）を ClickUp タスクの Description に書き戻す処理が必要
+      # TODO: CODE フェーズの場合、PR URL を ClickUp の GitHub PR URL カスタムフィールドに設定する処理が必要
+
+      - name: Update ClickUp status on success
+        if: success()
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          TASK_ID: ${{ inputs.task_id }}
+          STATUS: ${{ inputs.status_on_success }}
+        run: |
+          curl -fsS -X PUT "https://api.clickup.com/api/v2/task/${TASK_ID}" \
+            -H "Authorization: ${CLICKUP_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg status "$STATUS" '{status: $status}')"
+
+      - name: Update ClickUp status on error
+        if: failure()
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          TASK_ID: ${{ inputs.task_id }}
+          STATUS: ${{ inputs.status_on_error }}
+        run: |
+          # TODO: ClickUp の Agent Error カスタムフィールドにエラーメッセージを記録する（カスタムフィールドIDの設定が必要）
+          curl -fsS -X PUT "https://api.clickup.com/api/v2/task/${TASK_ID}" \
+            -H "Authorization: ${CLICKUP_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg status "$STATUS" '{status: $status}')"

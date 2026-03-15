@@ -60,7 +60,7 @@ cp .env.example .env
 |--------|------|------|
 | `CLICKUP_API_TOKEN` | Yes | ClickUp API トークン |
 | `CLICKUP_LIST_ID` | Yes | 対象 ClickUp リスト ID |
-| `GITHUB_PAT` | Yes (*1) | GitHub Personal Access Token（`repo` + `actions:write` スコープ） |
+| `GITHUB_PAT` | Yes (*1) | GitHub Personal Access Token（classic: `repo`, `workflow` スコープ / fine-grained: Contents + Actions の Read and write） |
 | `GITHUB_APP_ID` | Yes (*1) | GitHub App ID |
 | `GITHUB_APP_INSTALLATION_ID` | Yes (*1) | GitHub App Installation ID |
 | `GITHUB_APP_PRIVATE_KEY` | Yes (*1) | GitHub App Private Key（PEM 形式） |

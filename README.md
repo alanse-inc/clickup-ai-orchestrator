@@ -100,6 +100,9 @@ docker run --env-file .env clickup-tracker
 #### ローカル実行
 
 ```bash
+# .env を環境変数として読み込み
+export $(grep -v '^#' .env | xargs)
+
 go build -o bin/server ./cmd/server
 ./bin/server
 ```

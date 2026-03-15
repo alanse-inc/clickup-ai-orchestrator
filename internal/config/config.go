@@ -152,7 +152,9 @@ func loadGitHubAuth(cfg *Config) error {
 		return fmt.Errorf("invalid GITHUB_APP_INSTALLATION_ID value %q: %w", installID, err)
 	}
 
-	decodedKey, err := base64.StdEncoding.DecodeString(privateKey)
+	// 改行・空白を除去してからデコード（macOS base64 のデフォルト折り返しやコピペ時の余分な空白に対応）
+	normalized := strings.NewReplacer("\n", "", "\r", "", " ", "", "\t", "").Replace(privateKey)
+	decodedKey, err := base64.StdEncoding.DecodeString(normalized)
 	if err != nil {
 		return fmt.Errorf("invalid GITHUB_APP_PRIVATE_KEY: not valid base64: %w", err)
 	}

@@ -297,12 +297,11 @@ func TestLoad(t *testing.T) {
 				t.Setenv("GITHUB_REPO", "test-repo")
 				t.Setenv("GITHUB_APP_ID", "12345")
 				t.Setenv("GITHUB_APP_INSTALLATION_ID", "67890")
-				t.Setenv("GITHUB_APP_PRIVATE_KEY", base64.StdEncoding.EncodeToString([]byte("-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----\n")))
+				t.Setenv("GITHUB_APP_PRIVATE_KEY", base64.StdEncoding.EncodeToString([]byte("line1\nline2\nline3\n")))
 			},
 			check: func(t *testing.T, cfg *Config) {
-				want := "-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----\n" //nolint:gosec
-				if cfg.GitHubAppPrivateKey != want {
-					t.Errorf("GitHubAppPrivateKey = %q, want %q", cfg.GitHubAppPrivateKey, want)
+				if cfg.GitHubAppPrivateKey != "line1\nline2\nline3\n" {
+					t.Errorf("GitHubAppPrivateKey = %q, want %q", cfg.GitHubAppPrivateKey, "line1\nline2\nline3\n")
 				}
 			},
 		},

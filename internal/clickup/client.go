@@ -1,6 +1,7 @@
 package clickup
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -181,7 +182,7 @@ func (c *Client) UpdateTaskStatus(ctx context.Context, taskID string, status str
 	if err != nil {
 		return fmt.Errorf("marshaling status payload: %w", err)
 	}
-	resp, err := c.doRequest(ctx, http.MethodPut, url, strings.NewReader(string(jsonBody)))
+	resp, err := c.doRequest(ctx, http.MethodPut, url, bytes.NewReader(jsonBody))
 	if err != nil {
 		return fmt.Errorf("updating task status: %w", err)
 	}

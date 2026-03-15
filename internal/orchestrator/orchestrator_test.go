@@ -443,62 +443,70 @@ func TestCalcRetryDelay(t *testing.T) {
 	}
 }
 
-func TestHandleRetry_RedispatchesOnTriggerStatus(t *testing.T) {
-	fetcher := &mockTaskClient{
-		taskMap: map[string]*clickup.Task{
-			"task-1": {ID: "task-1", Status: clickup.StatusReadyForSpec},
+func TestHandleRetry(t *testing.T) {
+	tests := []struct {
+		name           string
+		taskStatus     string
+		wantDispatched bool
+		wantReleased   bool
+	}{
+		{
+			name:           "redispatches when task is in trigger status",
+			taskStatus:     clickup.StatusReadyForSpec,
+			wantDispatched: true,
+			// dispatch 内で再 Claim → MarkRunning されるため released=false
+			wantReleased: false,
+		},
+		{
+			name:           "releases when task is in non-trigger status",
+			taskStatus:     clickup.StatusSpecReview,
+			wantDispatched: false,
+			wantReleased:   true,
+		},
+		{
+			name:           "releases when task is in terminal status",
+			taskStatus:     clickup.StatusClosed,
+			wantDispatched: false,
+			wantReleased:   true,
 		},
 	}
-	dispatcher := &mockWorkflowDispatcher{}
-	o := New(fetcher, dispatcher, time.Second)
-	defer o.shutdown()
 
-	o.ctx = context.Background()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fetcher := &mockTaskClient{
+				taskMap: map[string]*clickup.Task{
+					"task-1": {ID: "task-1", Status: tt.taskStatus},
+				},
+			}
+			dispatcher := &mockWorkflowDispatcher{}
+			o := New(fetcher, dispatcher, time.Second)
+			defer o.shutdown()
 
-	// scheduleRetry でタイマーエントリを作成（handleRetry 内で delete される前提）
-	o.retryMu.Lock()
-	o.retryTimers["task-1"] = &retryEntry{taskID: "task-1", phase: "SPEC", attempt: 1}
-	o.retryMu.Unlock()
+			o.ctx = context.Background()
+			if !tt.wantDispatched {
+				// 非ディスパッチケースでは事前に Claim しておく（handleRetry 内で Release される）
+				o.state.Claim("task-1")
+			}
 
-	o.handleRetry("task-1", "SPEC", 1)
+			o.retryMu.Lock()
+			o.retryTimers["task-1"] = &retryEntry{taskID: "task-1", phase: "SPEC", attempt: 1}
+			o.retryMu.Unlock()
 
-	dispatcher.mu.Lock()
-	defer dispatcher.mu.Unlock()
-	if len(dispatcher.triggerCalls) != 1 {
-		t.Fatalf("expected 1 trigger call for redispatch, got %d", len(dispatcher.triggerCalls))
-	}
-	if dispatcher.triggerCalls[0].TaskID != "task-1" {
-		t.Errorf("expected task-1, got %s", dispatcher.triggerCalls[0].TaskID)
-	}
-}
+			o.handleRetry("task-1", "SPEC", 1)
 
-func TestHandleRetry_ReleasesOnNonTriggerStatus(t *testing.T) {
-	fetcher := &mockTaskClient{
-		taskMap: map[string]*clickup.Task{
-			"task-1": {ID: "task-1", Status: clickup.StatusSpecReview},
-		},
-	}
-	dispatcher := &mockWorkflowDispatcher{}
-	o := New(fetcher, dispatcher, time.Second)
-	defer o.shutdown()
+			dispatcher.mu.Lock()
+			dispatched := len(dispatcher.triggerCalls) > 0
+			dispatcher.mu.Unlock()
 
-	o.ctx = context.Background()
-	o.state.Claim("task-1")
+			if dispatched != tt.wantDispatched {
+				t.Errorf("dispatched = %v, want %v", dispatched, tt.wantDispatched)
+			}
 
-	o.retryMu.Lock()
-	o.retryTimers["task-1"] = &retryEntry{taskID: "task-1", phase: "SPEC", attempt: 1}
-	o.retryMu.Unlock()
-
-	o.handleRetry("task-1", "SPEC", 1)
-
-	if o.state.IsClaimedOrRunning("task-1") {
-		t.Fatal("expected task-1 to be released when not in trigger status")
-	}
-
-	dispatcher.mu.Lock()
-	defer dispatcher.mu.Unlock()
-	if len(dispatcher.triggerCalls) != 0 {
-		t.Fatalf("expected 0 trigger calls, got %d", len(dispatcher.triggerCalls))
+			released := !o.state.IsClaimedOrRunning("task-1")
+			if released != tt.wantReleased {
+				t.Errorf("released = %v, want %v", released, tt.wantReleased)
+			}
+		})
 	}
 }
 

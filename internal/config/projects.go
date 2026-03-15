@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -22,33 +21,7 @@ type projectsFile struct {
 	Projects []ProjectConfig `yaml:"projects"`
 }
 
-// loadProjects はプロジェクト設定を読み込む。
-// YAML ファイルが存在する場合はそこから、存在しない場合は環境変数からフォールバックする。
-// 両方設定されている場合はエラー。
-func loadProjects(projectsFilePath string) ([]ProjectConfig, error) {
-	_, statErr := os.Stat(projectsFilePath) //nolint:gosec // パスは環境変数 PROJECTS_FILE またはデフォルト値で制御される
-	fileExists := statErr == nil
-	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-		return nil, fmt.Errorf("checking projects file %s: %w", projectsFilePath, statErr)
-	}
-
-	envListID := os.Getenv("CLICKUP_LIST_ID")
-	envOwner := os.Getenv("GITHUB_OWNER")
-	envRepo := os.Getenv("GITHUB_REPO")
-	hasEnv := envListID != "" || envOwner != "" || envRepo != ""
-
-	if fileExists && hasEnv {
-		return nil, fmt.Errorf("both projects file (%s) and environment variables (CLICKUP_LIST_ID, GITHUB_OWNER, GITHUB_REPO) are set; use one or the other", projectsFilePath)
-	}
-
-	if fileExists {
-		return loadProjectsFromFile(projectsFilePath)
-	}
-
-	return loadProjectsFromEnv(envListID, envOwner, envRepo)
-}
-
-func loadProjectsFromFile(path string) ([]ProjectConfig, error) {
+func loadProjects(path string) ([]ProjectConfig, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // パスは環境変数 PROJECTS_FILE またはデフォルト値で制御される
 	if err != nil {
 		return nil, fmt.Errorf("reading projects file: %w", err)
@@ -83,34 +56,4 @@ func loadProjectsFromFile(path string) ([]ProjectConfig, error) {
 	}
 
 	return pf.Projects, nil
-}
-
-func loadProjectsFromEnv(listID, owner, repo string) ([]ProjectConfig, error) {
-	var missing []string
-	if listID == "" {
-		missing = append(missing, "CLICKUP_LIST_ID")
-	}
-	if owner == "" {
-		missing = append(missing, "GITHUB_OWNER")
-	}
-	if repo == "" {
-		missing = append(missing, "GITHUB_REPO")
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("missing required environment variables: %v (or provide a projects file)", missing)
-	}
-
-	workflowFile := os.Getenv("GITHUB_WORKFLOW_FILE")
-	if workflowFile == "" {
-		workflowFile = defaultWorkflowFile
-	}
-
-	return []ProjectConfig{
-		{
-			ClickUpListID:      listID,
-			GitHubOwner:        owner,
-			GitHubRepo:         repo,
-			GitHubWorkflowFile: workflowFile,
-		},
-	}, nil
 }

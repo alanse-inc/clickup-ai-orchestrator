@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26 AS builder
 
 WORKDIR /app
 COPY go.mod ./
@@ -6,9 +6,9 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /server ./cmd/server
 
-FROM alpine:3.21
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ca-certificates && adduser -D -H nonroot
+RUN useradd -r -s /usr/sbin/nologin nonroot
 COPY --from=builder /server /usr/local/bin/server
 USER nonroot
 ENTRYPOINT ["/usr/local/bin/server"]

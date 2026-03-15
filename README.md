@@ -95,13 +95,7 @@ docker build -t clickup-tracker .
 docker run --env-file .env clickup-tracker
 ```
 
-> **Note**: `--env-file` はマルチライン値を扱えないため、GitHub App 認証（`GITHUB_APP_PRIVATE_KEY`）を使用する場合はファイルマウントで渡してください:
-> ```bash
-> docker run --env-file .env \
->   -v /path/to/private-key.pem:/secrets/private-key.pem:ro \
->   -e GITHUB_APP_PRIVATE_KEY="$(cat /path/to/private-key.pem)" \
->   clickup-tracker
-> ```
+> **Note**: Docker の `--env-file` はマルチライン値を扱えないため、GitHub App 認証（`GITHUB_APP_PRIVATE_KEY`）を Docker で使用するには PEM キーの base64 エンコード対応が必要です（[#25](https://github.com/alanse-inc/clickup-ai-workflow-tracker/issues/25) で対応予定）。現時点では PAT 認証を使用してください。
 
 #### ローカル実行
 

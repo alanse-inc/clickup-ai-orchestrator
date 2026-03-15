@@ -82,5 +82,37 @@ func Load() (*Config, error) {
 	}
 	cfg.StatusMapping = sm
 
+	if err := validateStatusMapping(sm); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+func validateStatusMapping(sm clickup.StatusMapping) error {
+	fields := map[string]string{
+		"ReadyForSpec":   sm.ReadyForSpec,
+		"GeneratingSpec": sm.GeneratingSpec,
+		"SpecReview":     sm.SpecReview,
+		"ReadyForCode":   sm.ReadyForCode,
+		"Implementing":   sm.Implementing,
+		"PRReview":       sm.PRReview,
+		"Closed":         sm.Closed,
+	}
+
+	for name, val := range fields {
+		if val == "" {
+			return fmt.Errorf("status mapping %s must not be empty", name)
+		}
+	}
+
+	seen := make(map[string]string, len(fields))
+	for name, val := range fields {
+		if prev, ok := seen[val]; ok {
+			return fmt.Errorf("duplicate status %q in mapping fields %s and %s", val, prev, name)
+		}
+		seen[val] = name
+	}
+
+	return nil
 }

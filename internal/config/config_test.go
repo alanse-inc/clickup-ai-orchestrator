@@ -187,6 +187,15 @@ func TestLoad(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "duplicate status mapping values",
+			setup: func(t *testing.T) {
+				setRequiredEnvs(t)
+				t.Setenv("CLICKUP_STATUS_READY_FOR_SPEC", "implementing")
+			},
+			wantErr:     true,
+			errContains: "duplicate status",
+		},
 	}
 
 	for _, tt := range tests {

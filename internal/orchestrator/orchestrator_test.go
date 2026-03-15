@@ -90,6 +90,18 @@ func (m *mockWorkflowDispatcher) TriggerWorkflow(_ context.Context, taskID strin
 	return m.triggerErr
 }
 
+func TestNew_NilLoggerFallback(t *testing.T) {
+	fetcher := &mockTaskClient{
+		tasks:   []clickup.Task{},
+		taskMap: map[string]*clickup.Task{},
+	}
+	dispatcher := &mockWorkflowDispatcher{}
+	o := New(fetcher, dispatcher, time.Second, defaultSM, nil)
+
+	// Should not panic; uses slog.Default()
+	o.tick(context.Background())
+}
+
 func TestTick_DispatchesTriggerStatusTasks(t *testing.T) {
 	sm := defaultSM
 	fetcher := &mockTaskClient{

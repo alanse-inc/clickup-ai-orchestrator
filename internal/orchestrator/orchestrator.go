@@ -45,6 +45,9 @@ type retryEntry struct {
 
 // New は新しい Orchestrator を返す
 func New(taskClient TaskClient, dispatcher WorkflowDispatcher, pollInterval time.Duration, sm clickup.StatusMapping, logger *slog.Logger) *Orchestrator {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &Orchestrator{
 		taskClient:    taskClient,
 		dispatcher:    dispatcher,

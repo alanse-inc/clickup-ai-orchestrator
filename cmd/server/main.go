@@ -54,19 +54,18 @@ func main() {
 	defer cancel()
 
 	orchCfg := orchestrator.Config{
-		PollInterval:       time.Duration(cfg.PollIntervalMS) * time.Millisecond,
-		StatusMapping:      cfg.StatusMapping,
-		MaxConcurrentTasks: cfg.MaxConcurrentTasks,
+		PollInterval:  time.Duration(cfg.PollIntervalMS) * time.Millisecond,
+		StatusMapping: cfg.StatusMapping,
 	}
 
-	// 全プロジェクトで共有する AgentState（グローバル並行タスク数制限）
-	sharedState := orchestrator.NewAgentState()
+	// 全プロジェクトで共有するグローバル並行数リミッタ
+	limiter := orchestrator.NewConcurrencyLimiter(cfg.MaxConcurrentTasks)
 
 	var wg sync.WaitGroup
 	for i, proj := range cfg.Projects {
 		githubDispatcher := gh.NewDispatcher(githubAuth, proj.GitHubOwner, proj.GitHubRepo, proj.GitHubWorkflowFile)
 		projectLogger := logger.With("project", proj.GitHubOwner+"/"+proj.GitHubRepo)
-		orch := orchestrator.New(clickupClients[i], githubDispatcher, orchCfg, projectLogger, sharedState)
+		orch := orchestrator.New(clickupClients[i], githubDispatcher, orchCfg, projectLogger, limiter)
 
 		slog.InfoContext(ctx, "service_started",
 			"poll_interval_ms", cfg.PollIntervalMS,

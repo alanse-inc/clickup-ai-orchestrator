@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	githubAPIBaseURL   = "https://api.github.com"
 	defaultWorkflowRef = "main"
 	defaultHTTPTimeout = 30 * time.Second
 )
@@ -45,7 +44,7 @@ type dispatchRequest struct {
 // statusOnSuccess と statusOnError はワークフロー完了後に設定されるステータスとして inputs に渡される。
 func (d *Dispatcher) TriggerWorkflow(ctx context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string) error {
 	url := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%s/dispatches",
-		githubAPIBaseURL, d.owner, d.repo, d.workflowFile)
+		githubAPIBase, d.owner, d.repo, d.workflowFile)
 
 	body := dispatchRequest{
 		Ref: defaultWorkflowRef,

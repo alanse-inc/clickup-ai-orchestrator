@@ -11,20 +11,18 @@ import (
 )
 
 type Config struct {
-	ClickUpAPIToken    string
-	ClickUpListID      string
-	GitHubPAT          string
-	GitHubOwner        string
-	GitHubRepo         string
-	GitHubWorkflowFile string // default: "agent.yml"
-	PollIntervalMS     int    // default: 10000
-	StatusMapping      clickup.StatusMapping
-
-	// GitHub App 認証用
+	ClickUpAPIToken         string
+	ClickUpListID           string
+	GitHubPAT               string
 	AuthMode                string // "pat" or "app"
 	GitHubAppID             int64
 	GitHubAppInstallationID int64
 	GitHubAppPrivateKey     string
+	GitHubOwner             string
+	GitHubRepo              string
+	GitHubWorkflowFile      string // default: "agent.yml"
+	PollIntervalMS          int    // default: 10000
+	StatusMapping           clickup.StatusMapping
 }
 
 func Load() (*Config, error) {

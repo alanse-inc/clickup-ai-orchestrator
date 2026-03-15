@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"sort"
@@ -151,10 +152,15 @@ func loadGitHubAuth(cfg *Config) error {
 		return fmt.Errorf("invalid GITHUB_APP_INSTALLATION_ID value %q: %w", installID, err)
 	}
 
+	decodedKey, err := base64.StdEncoding.DecodeString(privateKey)
+	if err != nil {
+		return fmt.Errorf("invalid GITHUB_APP_PRIVATE_KEY: not valid base64: %w", err)
+	}
+
 	cfg.AuthMode = "app"
 	cfg.GitHubAppID = parsedAppID
 	cfg.GitHubAppInstallationID = parsedInstallID
-	cfg.GitHubAppPrivateKey = privateKey
+	cfg.GitHubAppPrivateKey = string(decodedKey)
 	return nil
 }
 

@@ -10,13 +10,23 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
+func newTestRequest(t *testing.T) *http.Request {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	return req
+}
+
 func TestPATAuthenticator_SetAuth(t *testing.T) {
 	auth := NewPATAuthenticator("ghp_test123")
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req := newTestRequest(t)
 	auth.SetAuth(req)
 
 	got := req.Header.Get("Authorization")
@@ -157,7 +167,7 @@ func TestGitHubAppAuthenticator_SetAuth(t *testing.T) {
 	}
 	auth.baseURL = server.URL
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req := newTestRequest(t)
 	auth.SetAuth(req)
 
 	got := req.Header.Get("Authorization")
@@ -172,9 +182,9 @@ func TestGitHubAppAuthenticator_TokenCache(t *testing.T) {
 	pemBytes := marshalPrivateKeyPEM(key)
 
 	tokenValue := "ghs_cached_token" //nolint:gosec // test value
-	callCount := 0
+	var callCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		callCount.Add(1)
 		resp := installationTokenResponse{
 			Token:     tokenValue,
 			ExpiresAt: time.Now().Add(1 * time.Hour),
@@ -192,13 +202,13 @@ func TestGitHubAppAuthenticator_TokenCache(t *testing.T) {
 	auth.baseURL = server.URL
 
 	// 2回呼んでも API は1回しか叩かれない
-	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req1 := newTestRequest(t)
 	auth.SetAuth(req1)
-	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req2 := newTestRequest(t)
 	auth.SetAuth(req2)
 
-	if callCount != 1 {
-		t.Errorf("API call count = %d, want 1 (token should be cached)", callCount)
+	if got := callCount.Load(); got != 1 {
+		t.Errorf("API call count = %d, want 1 (token should be cached)", got)
 	}
 }
 
@@ -206,9 +216,9 @@ func TestGitHubAppAuthenticator_TokenRefresh(t *testing.T) {
 	key := generateTestPrivateKey(t)
 	pemBytes := marshalPrivateKeyPEM(key)
 
-	callCount := 0
+	var callCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
+		callCount.Add(1)
 		resp := installationTokenResponse{ //nolint:gosec // test value
 			Token:     "ghs_refreshed_token",
 			ExpiresAt: time.Now().Add(1 * time.Hour),
@@ -226,7 +236,7 @@ func TestGitHubAppAuthenticator_TokenRefresh(t *testing.T) {
 	auth.baseURL = server.URL
 
 	// 初回取得
-	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req1 := newTestRequest(t)
 	auth.SetAuth(req1)
 
 	// トークンを期限切れにする
@@ -235,10 +245,10 @@ func TestGitHubAppAuthenticator_TokenRefresh(t *testing.T) {
 	auth.mu.Unlock()
 
 	// 2回目はリフレッシュされるべき
-	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	req2 := newTestRequest(t)
 	auth.SetAuth(req2)
 
-	if callCount != 2 {
-		t.Errorf("API call count = %d, want 2 (token should be refreshed)", callCount)
+	if got := callCount.Load(); got != 2 {
+		t.Errorf("API call count = %d, want 2 (token should be refreshed)", got)
 	}
 }

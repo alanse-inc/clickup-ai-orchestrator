@@ -122,6 +122,67 @@ func TestActiveCount(t *testing.T) {
 	}
 }
 
+func TestClaimIfUnderLimit(t *testing.T) {
+	s := NewAgentState()
+
+	// 上限なし（0）の場合は常に成功
+	if !s.ClaimIfUnderLimit("task-1", 0) {
+		t.Fatal("expected ClaimIfUnderLimit to succeed with no limit")
+	}
+	s.Release("task-1")
+
+	// 上限 2 で 2 件まで claim できる
+	if !s.ClaimIfUnderLimit("task-1", 2) {
+		t.Fatal("expected first claim to succeed")
+	}
+	if !s.ClaimIfUnderLimit("task-2", 2) {
+		t.Fatal("expected second claim to succeed")
+	}
+
+	// 上限に達したら失敗
+	if s.ClaimIfUnderLimit("task-3", 2) {
+		t.Fatal("expected third claim to fail (limit reached)")
+	}
+
+	// 既クレーム済みタスクも失敗
+	if s.ClaimIfUnderLimit("task-1", 2) {
+		t.Fatal("expected already-claimed task to fail")
+	}
+
+	// 解放後は再び claim できる
+	s.Release("task-1")
+	if !s.ClaimIfUnderLimit("task-3", 2) {
+		t.Fatal("expected claim to succeed after release")
+	}
+}
+
+func TestClaimIfUnderLimit_ConcurrentRace(t *testing.T) {
+	// 上限 1 で複数 goroutine が同時に claim しても超えないことを確認
+	s := NewAgentState()
+	const goroutines = 100
+
+	var wg sync.WaitGroup
+	claimedCount := 0
+	var mu sync.Mutex
+
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			if s.ClaimIfUnderLimit("task-"+string(rune('A'+claimedCount%26)), 1) {
+				mu.Lock()
+				claimedCount++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+
+	if s.ActiveCount() > 1 {
+		t.Fatalf("expected ActiveCount <= 1, got %d", s.ActiveCount())
+	}
+}
+
 func TestConcurrentAccess(t *testing.T) {
 	s := NewAgentState()
 	const goroutines = 100

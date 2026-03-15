@@ -157,13 +157,12 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 
 // dispatch はタスクのディスパッチを行う。attempt はリトライ回数で、失敗時に scheduleRetry に引き継がれる。
 func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) {
-	if o.maxConcurrentTasks > 0 && o.state.ActiveCount() >= o.maxConcurrentTasks {
-		o.logger.Info("max concurrent tasks reached, skipping dispatch", "task_id", task.ID, "limit", o.maxConcurrentTasks)
-		return
-	}
-
-	if !o.state.Claim(task.ID) {
-		o.logger.Warn("task_already_claimed", "task_id", task.ID, "status", task.Status)
+	if !o.state.ClaimIfUnderLimit(task.ID, o.maxConcurrentTasks) {
+		if o.maxConcurrentTasks > 0 && o.state.ActiveCount() >= o.maxConcurrentTasks {
+			o.logger.Info("max concurrent tasks reached, skipping dispatch", "task_id", task.ID, "limit", o.maxConcurrentTasks)
+		} else {
+			o.logger.Warn("task_already_claimed", "task_id", task.ID, "status", task.Status)
+		}
 		return
 	}
 

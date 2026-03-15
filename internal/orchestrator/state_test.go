@@ -1,8 +1,10 @@
 package orchestrator
 
 import (
+	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -162,17 +164,14 @@ func TestClaimIfUnderLimit_ConcurrentRace(t *testing.T) {
 	const goroutines = 100
 
 	var wg sync.WaitGroup
-	claimedCount := 0
-	var mu sync.Mutex
+	var claimedCount atomic.Int32
 
 	wg.Add(goroutines)
-	for range goroutines {
+	for i := range goroutines {
 		go func() {
 			defer wg.Done()
-			if s.ClaimIfUnderLimit("task-"+string(rune('A'+claimedCount%26)), 1) {
-				mu.Lock()
-				claimedCount++
-				mu.Unlock()
+			if s.ClaimIfUnderLimit(fmt.Sprintf("task-%d", i), 1) {
+				claimedCount.Add(1)
 			}
 		}()
 	}

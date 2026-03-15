@@ -1,0 +1,254 @@
+package github
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func newTestRequest(t *testing.T) *http.Request {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	return req
+}
+
+func TestPATAuthenticator_SetAuth(t *testing.T) {
+	auth := NewPATAuthenticator("ghp_test123")
+	req := newTestRequest(t)
+	auth.SetAuth(req)
+
+	got := req.Header.Get("Authorization")
+	want := "Bearer ghp_test123"
+	if got != want {
+		t.Errorf("Authorization = %q, want %q", got, want)
+	}
+}
+
+func generateTestPrivateKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate RSA key: %v", err)
+	}
+	return key
+}
+
+func marshalPrivateKeyPEM(key *rsa.PrivateKey) []byte {
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(key),
+	})
+}
+
+func marshalPKCS8PEM(t *testing.T, key *rsa.PrivateKey) []byte {
+	t.Helper()
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatalf("failed to marshal PKCS#8 key: %v", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: pkcs8Bytes,
+	})
+}
+
+func TestNewGitHubAppAuthenticator(t *testing.T) {
+	key := generateTestPrivateKey(t)
+	pemBytes := marshalPrivateKeyPEM(key)
+	pkcs8PEM := marshalPKCS8PEM(t, key)
+
+	tests := []struct {
+		name        string
+		appID       int64
+		installID   int64
+		privateKey  []byte
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:       "valid PKCS#1 key",
+			appID:      12345,
+			installID:  67890,
+			privateKey: pemBytes,
+		},
+		{
+			name:       "valid PKCS#8 key",
+			appID:      12345,
+			installID:  67890,
+			privateKey: pkcs8PEM,
+		},
+		{
+			name:        "invalid PEM",
+			appID:       12345,
+			installID:   67890,
+			privateKey:  []byte("not-a-pem"),
+			wantErr:     true,
+			errContains: "failed to decode PEM",
+		},
+		{
+			name:        "invalid key bytes",
+			appID:       12345,
+			installID:   67890,
+			privateKey:  pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: []byte("bad")}),
+			wantErr:     true,
+			errContains: "failed to parse",
+		},
+		{
+			name:        "unsupported PEM type",
+			appID:       12345,
+			installID:   67890,
+			privateKey:  pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: []byte("data")}),
+			wantErr:     true,
+			errContains: "unsupported PEM block type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth, err := NewGitHubAppAuthenticator(tt.appID, tt.installID, tt.privateKey)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if auth == nil {
+				t.Fatal("expected non-nil authenticator")
+			}
+		})
+	}
+}
+
+func TestGitHubAppAuthenticator_SetAuth(t *testing.T) {
+	key := generateTestPrivateKey(t)
+	pemBytes := marshalPrivateKeyPEM(key)
+
+	// Installation token レスポンスを返すモックサーバー
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// JWT が Bearer ヘッダーに含まれていることを確認
+		authHeader := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		// installation token レスポンス
+		resp := installationTokenResponse{ //nolint:gosec // test value
+			Token:     "ghs_test_installation_token",
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	auth, err := NewGitHubAppAuthenticator(12345, 67890, pemBytes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	auth.baseURL = server.URL
+
+	req := newTestRequest(t)
+	auth.SetAuth(req)
+
+	got := req.Header.Get("Authorization")
+	want := "Bearer ghs_test_installation_token"
+	if got != want {
+		t.Errorf("Authorization = %q, want %q", got, want)
+	}
+}
+
+func TestGitHubAppAuthenticator_TokenCache(t *testing.T) {
+	key := generateTestPrivateKey(t)
+	pemBytes := marshalPrivateKeyPEM(key)
+
+	tokenValue := "ghs_cached_token" //nolint:gosec // test value
+	var callCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		resp := installationTokenResponse{
+			Token:     tokenValue,
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	auth, err := NewGitHubAppAuthenticator(12345, 67890, pemBytes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	auth.baseURL = server.URL
+
+	// 2回呼んでも API は1回しか叩かれない
+	req1 := newTestRequest(t)
+	auth.SetAuth(req1)
+	req2 := newTestRequest(t)
+	auth.SetAuth(req2)
+
+	if got := callCount.Load(); got != 1 {
+		t.Errorf("API call count = %d, want 1 (token should be cached)", got)
+	}
+}
+
+func TestGitHubAppAuthenticator_TokenRefresh(t *testing.T) {
+	key := generateTestPrivateKey(t)
+	pemBytes := marshalPrivateKeyPEM(key)
+
+	var callCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		resp := installationTokenResponse{ //nolint:gosec // test value
+			Token:     "ghs_refreshed_token",
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	auth, err := NewGitHubAppAuthenticator(12345, 67890, pemBytes)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	auth.baseURL = server.URL
+
+	// 初回取得
+	req1 := newTestRequest(t)
+	auth.SetAuth(req1)
+
+	// トークンを期限切れにする
+	auth.mu.Lock()
+	auth.expiresAt = time.Now().Add(-1 * time.Minute)
+	auth.mu.Unlock()
+
+	// 2回目はリフレッシュされるべき
+	req2 := newTestRequest(t)
+	auth.SetAuth(req2)
+
+	if got := callCount.Load(); got != 2 {
+		t.Errorf("API call count = %d, want 2 (token should be refreshed)", got)
+	}
+}

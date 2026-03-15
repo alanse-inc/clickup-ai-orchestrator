@@ -511,24 +511,57 @@ func TestHandleRetry(t *testing.T) {
 }
 
 func TestScheduleRetry_CancelsExistingTimer(t *testing.T) {
+	// handleRetry が呼ばれたときの attempt を記録するため、
+	// トリガー状態のタスクを用意して dispatch まで到達させる
 	fetcher := &mockTaskClient{
-		taskMap: map[string]*clickup.Task{},
+		taskMap: map[string]*clickup.Task{
+			"task-1": {ID: "task-1", Status: clickup.StatusReadyForSpec},
+		},
 	}
 	dispatcher := &mockWorkflowDispatcher{}
 	o := New(fetcher, dispatcher, time.Second)
+	o.ctx = context.Background()
 	defer o.shutdown()
 
+	// attempt=1 で短い遅延のリトライをスケジュール
 	o.scheduleRetry("task-1", "SPEC", 1, fmt.Errorf("error1"))
+
+	// すぐに attempt=2 で上書き → attempt=1 のタイマーはキャンセルされるはず
 	o.scheduleRetry("task-1", "SPEC", 2, fmt.Errorf("error2"))
 
+	// エントリが attempt=2 に更新されていることを確認
 	o.retryMu.Lock()
-	defer o.retryMu.Unlock()
-
 	entry, ok := o.retryTimers["task-1"]
 	if !ok {
+		o.retryMu.Unlock()
 		t.Fatal("expected retry timer to exist")
 	}
 	if entry.attempt != 2 {
-		t.Errorf("expected attempt 2 (latest), got %d", entry.attempt)
+		o.retryMu.Unlock()
+		t.Fatalf("expected attempt 2 (latest), got %d", entry.attempt)
+	}
+	o.retryMu.Unlock()
+
+	// attempt=2 のタイマーが発火するまで待つ（バックオフ: 10s*2^1=20s だが実際のタイマーを使うため、
+	// ここではタイマーを手動発火させて旧 attempt のガードを検証する）
+	// handleRetry は attempt 不一致時に何もしないことを検証
+	// shutdown で timer.Stop() が呼ばれるため、ダミータイマーを設定
+	o.retryMu.Lock()
+	o.retryTimers["task-1"] = &retryEntry{
+		taskID:  "task-1",
+		phase:   "SPEC",
+		attempt: 2,
+		timer:   time.NewTimer(time.Hour), // shutdown 用ダミー
+	}
+	o.retryMu.Unlock()
+
+	// 旧 attempt=1 のコールバックが走った場合: attempt 不一致で早期リターンするはず
+	o.handleRetry("task-1", "SPEC", 1)
+
+	// dispatch が呼ばれていないことを確認（attempt 不一致でガードされた）
+	dispatcher.mu.Lock()
+	defer dispatcher.mu.Unlock()
+	if len(dispatcher.triggerCalls) != 0 {
+		t.Errorf("expected 0 trigger calls (old attempt should be ignored), got %d", len(dispatcher.triggerCalls))
 	}
 }

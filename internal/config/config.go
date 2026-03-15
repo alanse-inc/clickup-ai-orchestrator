@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,7 @@ func Load() (*Config, error) {
 	}
 
 	if len(missing) > 0 {
+		sort.Strings(missing)
 		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 

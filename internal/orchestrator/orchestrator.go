@@ -87,6 +87,14 @@ func (o *Orchestrator) shutdown() {
 	}
 }
 
+// hasRetryPending はタスクにリトライタイマーが設定されているかを返す
+func (o *Orchestrator) hasRetryPending(taskID string) bool {
+	o.retryMu.Lock()
+	defer o.retryMu.Unlock()
+	_, ok := o.retryTimers[taskID]
+	return ok
+}
+
 // tick は1ティックの処理を実行する
 func (o *Orchestrator) tick(ctx context.Context) {
 	o.reconcile(ctx)
@@ -98,7 +106,7 @@ func (o *Orchestrator) tick(ctx context.Context) {
 	}
 
 	for _, task := range tasks {
-		if clickup.IsTriggerStatus(task.Status) {
+		if clickup.IsTriggerStatus(task.Status) && !o.hasRetryPending(task.ID) {
 			o.dispatch(ctx, task, 1)
 		}
 	}

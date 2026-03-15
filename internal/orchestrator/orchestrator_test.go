@@ -303,6 +303,7 @@ func TestDispatch_UpdateStatusError(t *testing.T) {
 	}
 	dispatcher := &mockWorkflowDispatcher{}
 	o := New(fetcher, dispatcher, time.Second)
+	defer o.shutdown()
 
 	task := clickup.Task{ID: "task-1", Status: clickup.StatusReadyForSpec}
 	o.dispatch(context.Background(), task, 1)
@@ -328,6 +329,7 @@ func TestDispatch_TriggerWorkflowError(t *testing.T) {
 		triggerErr: fmt.Errorf("trigger error"),
 	}
 	o := New(fetcher, dispatcher, time.Second)
+	defer o.shutdown()
 
 	task := clickup.Task{ID: "task-1", Status: clickup.StatusReadyForSpec}
 	o.dispatch(context.Background(), task, 1)

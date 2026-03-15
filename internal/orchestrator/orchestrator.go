@@ -125,7 +125,9 @@ func (o *Orchestrator) tick(ctx context.Context) {
 
 	for _, task := range tasks {
 		if o.statusMapping.IsTriggerStatus(task.Status) && !o.hasRetryPending(task.ID) {
-			o.dispatch(ctx, task, 1)
+			if !o.dispatch(ctx, task, 1) {
+				break
+			}
 		}
 	}
 }
@@ -157,23 +159,24 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 }
 
 // dispatch はタスクのディスパッチを行う。attempt はリトライ回数で、失敗時に scheduleRetry に引き継がれる。
-func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) {
+// 並行数上限に達した場合は false を返し、呼び出し元で残りタスクの処理を打ち切れるようにする。
+func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) bool {
 	if !o.state.Claim(task.ID) {
 		o.logger.Warn("task_already_claimed", "task_id", task.ID, "status", task.Status)
-		return
+		return true
 	}
 
 	if !o.limiter.TryAcquire() {
 		o.logger.Info("max concurrent tasks reached", "task_id", task.ID)
 		o.state.Release(task.ID)
-		return
+		return false
 	}
 
 	phase, err := o.statusMapping.PhaseFromStatus(task.Status)
 	if err != nil {
 		o.logger.Error("failed to determine phase", "task_id", task.ID, "status", task.Status, "error", err)
 		o.release(task.ID)
-		return
+		return true
 	}
 
 	phaseStr := string(phase)
@@ -184,7 +187,7 @@ func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt 
 		tl.Error("failed to update task status", "status", processingStatus, "error", err)
 		o.release(task.ID)
 		o.scheduleRetry(task.ID, phaseStr, attempt, err)
-		return
+		return true
 	}
 
 	successStatus := o.statusMapping.SuccessStatusFor(phase)
@@ -197,11 +200,12 @@ func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt 
 		}
 		o.release(task.ID)
 		o.scheduleRetry(task.ID, phaseStr, attempt, err)
-		return
+		return true
 	}
 
 	o.state.MarkRunning(task.ID)
 	tl.Info("task dispatched")
+	return true
 }
 
 // release はローカル state とグローバル limiter の両方を解放する
@@ -291,7 +295,7 @@ func (o *Orchestrator) handleRetry(taskID string, phase string, attempt int) {
 
 	if o.statusMapping.IsTriggerStatus(task.Status) {
 		tl.Info("retrying dispatch", "attempt", attempt)
-		o.dispatch(ctx, *task, attempt+1)
+		_ = o.dispatch(ctx, *task, attempt+1)
 	} else {
 		tl.Info("task no longer in trigger status, releasing", "status", task.Status)
 		o.state.Release(taskID)

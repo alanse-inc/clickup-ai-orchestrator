@@ -217,14 +217,7 @@ Idea Draft -> Ready for Code -> Implementing -> PR Review -> CLOSED
 | `POLL_INTERVAL_MS` | No | ポーリング間隔ミリ秒 (default: `10000`) |
 | `MAX_CONCURRENT_TASKS` | No | 並行タスク数上限 (default: `0` = 無制限) |
 | `PROJECTS_FILE` | No | プロジェクト設定ファイルのパス (default: `projects.yml`) |
-| `CLICKUP_LIST_ID` | No (*2) | 対象ClickUpリストID |
-| `GITHUB_OWNER` | No (*2) | GitHubリポジトリオーナー |
-| `GITHUB_REPO` | No (*2) | GitHubリポジトリ名 |
-| `GITHUB_WORKFLOW_FILE` | No (*2) | ワークフローファイル名 (default: `agent.yml`) |
-
 *1: `GITHUB_PAT` と `GITHUB_APP_*` は排他。いずれか一方を設定する。
-
-*2: `PROJECTS_FILE` で指定された YAML ファイルが存在しない場合のフォールバック用。YAML ファイルが存在する場合はこれらの環境変数は使用不可（両方設定するとエラー）。
 
 ### 6.2 Project-Repository Binding
 
@@ -250,8 +243,6 @@ projects:
     github_repo: "repo-b"
 ```
 
-**環境変数フォールバック**: YAML ファイルが存在しない場合、従来の環境変数 `CLICKUP_LIST_ID` + `GITHUB_OWNER` + `GITHUB_REPO` から単一プロジェクトとして動作する。YAML ファイルと環境変数の両方が設定されている場合はエラー。
-
 プロジェクトごとに独立した goroutine でポーリングを実行する。`MAX_CONCURRENT_TASKS` は全プロジェクト合算のグローバル上限として機能する。
 
 ### 6.3 Startup Validation
@@ -260,7 +251,7 @@ projects:
 
 - `CLICKUP_API_TOKEN` が設定されている。
 - GitHub 認証: `GITHUB_PAT` または `GITHUB_APP_*`（`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`）のいずれか一方が設定されている（排他）。
-- プロジェクト設定: YAML ファイルまたは環境変数フォールバック（`CLICKUP_LIST_ID`, `GITHUB_OWNER`, `GITHUB_REPO`）のいずれかでプロジェクトが1つ以上定義されている。両方が設定されている場合はエラー。
+- プロジェクト設定: YAML ファイル（`PROJECTS_FILE`）でプロジェクトが1つ以上定義されている。
 - 各プロジェクトの ClickUp リストに必要なステータスが存在する。
 
 いずれかが欠落している場合、起動を失敗させエラーを出力する。

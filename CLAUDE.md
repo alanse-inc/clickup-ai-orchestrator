@@ -48,14 +48,8 @@ CI では golangci-lint-action が自動でバイナリを取得するため go.
 | POLL_INTERVAL_MS | No | ポーリング間隔ミリ秒 (default: 10000) |
 | MAX_CONCURRENT_TASKS | No | 並行タスク数上限 (default: 0 = 無制限) |
 | PROJECTS_FILE | No | プロジェクト設定ファイルのパス (default: projects.yml) |
-| CLICKUP_LIST_ID | No (*2) | 対象ClickUpリストID |
-| GITHUB_OWNER | No (*2) | GitHubリポジトリオーナー |
-| GITHUB_REPO | No (*2) | GitHubリポジトリ名 |
-| GITHUB_WORKFLOW_FILE | No (*2) | ワークフローファイル名 (default: agent.yml) |
 
 *1: `GITHUB_PAT` と `GITHUB_APP_*` は排他。いずれか一方を設定する。
-
-*2: `PROJECTS_FILE` で指定された YAML ファイルが存在しない場合のフォールバック用。YAML ファイルが存在する場合はこれらの環境変数は使用不可（両方設定するとエラー）。
 
 ## Coding Conventions
 

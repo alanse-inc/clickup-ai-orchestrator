@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -50,8 +51,39 @@ func main() {
 		}
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	srvErrCh := make(chan error, 1)
+	go func() {
+		slog.Info("health_server_started", "port", port) //nolint:gosec // G706: port is from trusted env var
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			srvErrCh <- err
+		}
+	}()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// シグナル受信時にヘルスチェックサーバーを即座に停止する
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("health_server_shutdown_error", "error", err)
+		}
+	}()
 
 	orchCfg := orchestrator.Config{
 		PollInterval:  time.Duration(cfg.PollIntervalMS) * time.Millisecond,
@@ -78,6 +110,13 @@ func main() {
 			defer wg.Done()
 			o.Run(ctx)
 		}(orch)
+	}
+
+	select {
+	case err := <-srvErrCh:
+		slog.Error("health_server_failed", "error", err)
+		os.Exit(1)
+	case <-ctx.Done():
 	}
 
 	wg.Wait()

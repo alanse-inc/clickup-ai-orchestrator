@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultWorkflowFile = "agent.yml"
+const defaultWorkflowFile = "agent.yaml"
 
 // ProjectConfig は1つの ClickUp リスト - GitHub リポジトリペアの設定
 type ProjectConfig struct {

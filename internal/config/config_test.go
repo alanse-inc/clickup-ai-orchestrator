@@ -10,10 +10,10 @@ import (
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/clickup"
 )
 
-// writeProjectsFile はテスト用の projects.yml を作成し、PROJECTS_FILE 環境変数を設定する
+// writeProjectsFile はテスト用の projects.yaml を作成し、PROJECTS_FILE 環境変数を設定する
 func writeProjectsFile(t *testing.T, yaml string) {
 	t.Helper()
-	tmpFile := filepath.Join(t.TempDir(), "projects.yml")
+	tmpFile := filepath.Join(t.TempDir(), "projects.yaml")
 	if err := os.WriteFile(tmpFile, []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -90,8 +90,8 @@ func TestLoad(t *testing.T) {
 				setRequiredEnvs(t)
 			},
 			check: func(t *testing.T, cfg *Config) {
-				if cfg.Projects[0].GitHubWorkflowFile != "agent.yml" {
-					t.Errorf("GitHubWorkflowFile = %q, want %q", cfg.Projects[0].GitHubWorkflowFile, "agent.yml")
+				if cfg.Projects[0].GitHubWorkflowFile != "agent.yaml" {
+					t.Errorf("GitHubWorkflowFile = %q, want %q", cfg.Projects[0].GitHubWorkflowFile, "agent.yaml")
 				}
 				if cfg.PollIntervalMS != 10000 {
 					t.Errorf("PollIntervalMS = %d, want %d", cfg.PollIntervalMS, 10000)
@@ -107,12 +107,12 @@ func TestLoad(t *testing.T) {
   - clickup_list_id: "list-123"
     github_owner: "test-owner"
     github_repo: "test-repo"
-    github_workflow_file: "custom.yml"
+    github_workflow_file: "custom.yaml"
 `)
 			},
 			check: func(t *testing.T, cfg *Config) {
-				if cfg.Projects[0].GitHubWorkflowFile != "custom.yml" {
-					t.Errorf("GitHubWorkflowFile = %q, want %q", cfg.Projects[0].GitHubWorkflowFile, "custom.yml")
+				if cfg.Projects[0].GitHubWorkflowFile != "custom.yaml" {
+					t.Errorf("GitHubWorkflowFile = %q, want %q", cfg.Projects[0].GitHubWorkflowFile, "custom.yaml")
 				}
 			},
 		},
@@ -144,7 +144,7 @@ func TestLoad(t *testing.T) {
 				clearEnvs(t)
 				t.Setenv("CLICKUP_API_TOKEN", "test-token")
 				t.Setenv("GITHUB_PAT", "ghp_test")
-				t.Setenv("PROJECTS_FILE", filepath.Join(t.TempDir(), "nonexistent.yml"))
+				t.Setenv("PROJECTS_FILE", filepath.Join(t.TempDir(), "nonexistent.yaml"))
 			},
 			wantErr:     true,
 			errContains: "reading projects file",
@@ -444,8 +444,8 @@ func TestLoadProjects_FromYAML(t *testing.T) {
 				if projects[0].ClickUpListID != "list-1" {
 					t.Errorf("ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-1")
 				}
-				if projects[0].GitHubWorkflowFile != "agent.yml" {
-					t.Errorf("GitHubWorkflowFile = %q, want %q", projects[0].GitHubWorkflowFile, "agent.yml")
+				if projects[0].GitHubWorkflowFile != "agent.yaml" {
+					t.Errorf("GitHubWorkflowFile = %q, want %q", projects[0].GitHubWorkflowFile, "agent.yaml")
 				}
 			},
 		},
@@ -458,14 +458,14 @@ func TestLoadProjects_FromYAML(t *testing.T) {
   - clickup_list_id: "list-2"
     github_owner: "org"
     github_repo: "repo-b"
-    github_workflow_file: "custom.yml"
+    github_workflow_file: "custom.yaml"
 `,
 			check: func(t *testing.T, projects []ProjectConfig) {
 				if len(projects) != 2 {
 					t.Fatalf("len = %d, want 2", len(projects))
 				}
-				if projects[1].GitHubWorkflowFile != "custom.yml" {
-					t.Errorf("GitHubWorkflowFile = %q, want %q", projects[1].GitHubWorkflowFile, "custom.yml")
+				if projects[1].GitHubWorkflowFile != "custom.yaml" {
+					t.Errorf("GitHubWorkflowFile = %q, want %q", projects[1].GitHubWorkflowFile, "custom.yaml")
 				}
 			},
 		},
@@ -494,7 +494,7 @@ func TestLoadProjects_FromYAML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tmpFile := filepath.Join(t.TempDir(), "projects.yml")
+			tmpFile := filepath.Join(t.TempDir(), "projects.yaml")
 			if err := os.WriteFile(tmpFile, []byte(tt.yaml), 0o600); err != nil {
 				t.Fatal(err)
 			}

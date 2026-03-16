@@ -45,7 +45,7 @@ func Load() (*Config, error) {
 	// プロジェクト設定の読み込み
 	projectsFilePath := os.Getenv("PROJECTS_FILE")
 	if projectsFilePath == "" {
-		projectsFilePath = "projects.yml"
+		projectsFilePath = "projects.yaml"
 	}
 	projects, err := loadProjects(projectsFilePath)
 	if err != nil {

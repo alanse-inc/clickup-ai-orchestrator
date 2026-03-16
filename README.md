@@ -123,15 +123,6 @@ go build -o bin/server ./cmd/server
 ./bin/server
 ```
 
-#### Docker
-
-```bash
-docker build -t clickup-ai-orchestrator .
-docker run --env-file .env clickup-ai-orchestrator
-```
-
-> **Note**: Docker の `--env-file` はマルチライン値を扱えないため、GitHub App 認証（`GITHUB_APP_PRIVATE_KEY`）を使用する場合は base64 エンコードした値を設定してください。
-
 ## Usage
 
 ### 通常フロー（SPEC → CODE）

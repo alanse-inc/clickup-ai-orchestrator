@@ -51,7 +51,6 @@ func main() {
 		}
 	}
 
-	// Cloud Run ヘルスチェック用 HTTP サーバー
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

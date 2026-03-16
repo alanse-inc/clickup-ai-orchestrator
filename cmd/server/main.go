@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -26,13 +27,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	clickupClient := clickup.NewClient(cfg.ClickUpAPIToken, cfg.ClickUpListID)
-
-	if err := validateStatuses(clickupClient, cfg); err != nil {
-		slog.Error("status_validation_failed", "error", err)
-		os.Exit(1)
-	}
-
 	var githubAuth gh.Authenticator
 	switch cfg.AuthMode {
 	case "app":
@@ -45,25 +39,48 @@ func main() {
 	default:
 		githubAuth = gh.NewPATAuthenticator(cfg.GitHubPAT)
 	}
-	githubDispatcher := gh.NewDispatcher(githubAuth, cfg.GitHubOwner, cfg.GitHubRepo, cfg.GitHubWorkflowFile)
-	orchCfg := orchestrator.Config{
-		PollInterval:       time.Duration(cfg.PollIntervalMS) * time.Millisecond,
-		StatusMapping:      cfg.StatusMapping,
-		MaxConcurrentTasks: cfg.MaxConcurrentTasks,
-	}
 
-	orch := orchestrator.New(clickupClient, githubDispatcher, orchCfg, logger)
+	// 全プロジェクトのステータス検証を先に完了する
+	clickupClients := make([]*clickup.Client, len(cfg.Projects))
+	for i, proj := range cfg.Projects {
+		clickupClients[i] = clickup.NewClient(cfg.ClickUpAPIToken, proj.ClickUpListID)
+		if err := validateStatuses(clickupClients[i], cfg); err != nil {
+			slog.Error("status_validation_failed", "error", err, "project", proj.GitHubOwner+"/"+proj.GitHubRepo)
+			os.Exit(1)
+		}
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	slog.InfoContext(ctx, "service_started",
-		"poll_interval_ms", cfg.PollIntervalMS,
-		"clickup_list_id", cfg.ClickUpListID,
-		"github_repo", cfg.GitHubOwner+"/"+cfg.GitHubRepo,
-	)
+	orchCfg := orchestrator.Config{
+		PollInterval:  time.Duration(cfg.PollIntervalMS) * time.Millisecond,
+		StatusMapping: cfg.StatusMapping,
+	}
 
-	orch.Run(ctx)
+	// 全プロジェクトで共有するグローバル並行数リミッタ
+	limiter := orchestrator.NewConcurrencyLimiter(cfg.MaxConcurrentTasks)
+
+	var wg sync.WaitGroup
+	for i, proj := range cfg.Projects {
+		githubDispatcher := gh.NewDispatcher(githubAuth, proj.GitHubOwner, proj.GitHubRepo, proj.GitHubWorkflowFile)
+		projectLogger := logger.With("project", proj.GitHubOwner+"/"+proj.GitHubRepo)
+		orch := orchestrator.New(clickupClients[i], githubDispatcher, orchCfg, projectLogger, limiter)
+
+		slog.InfoContext(ctx, "service_started",
+			"poll_interval_ms", cfg.PollIntervalMS,
+			"clickup_list_id", proj.ClickUpListID,
+			"github_repo", proj.GitHubOwner+"/"+proj.GitHubRepo,
+		)
+
+		wg.Add(1)
+		go func(o *orchestrator.Orchestrator) {
+			defer wg.Done()
+			o.Run(ctx)
+		}(orch)
+	}
+
+	wg.Wait()
 	slog.InfoContext(ctx, "service_stopped")
 }
 

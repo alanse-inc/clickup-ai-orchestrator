@@ -71,7 +71,7 @@ func TestTriggerWorkflow(t *testing.T) {
 			}))
 			defer server.Close()
 
-			d := NewDispatcher(NewPATAuthenticator("test-pat"), "test-owner", "test-repo", "agent.yml")
+			d := NewDispatcher(NewPATAuthenticator("test-pat"), "test-owner", "test-repo", "agent.yaml")
 			// httpClient のベースURLをモックサーバーに差し替え
 			d.httpClient = server.Client()
 			// URL をモックサーバーに向けるためにカスタムトランスポートを設定
@@ -104,7 +104,7 @@ func TestTriggerWorkflow(t *testing.T) {
 			}
 
 			// URL パスの検証
-			wantPath := "/repos/test-owner/test-repo/actions/workflows/agent.yml/dispatches"
+			wantPath := "/repos/test-owner/test-repo/actions/workflows/agent.yaml/dispatches"
 			if capturedReq.URL.Path != wantPath {
 				t.Errorf("path = %s, want %s", capturedReq.URL.Path, wantPath)
 			}

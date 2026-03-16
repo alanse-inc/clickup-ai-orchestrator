@@ -24,24 +24,23 @@ type WorkflowDispatcher interface {
 
 // Config は Orchestrator の設定を保持する
 type Config struct {
-	PollInterval       time.Duration
-	StatusMapping      clickup.StatusMapping
-	MaxConcurrentTasks int // 0 は無制限
+	PollInterval  time.Duration
+	StatusMapping clickup.StatusMapping
 }
 
 // Orchestrator はポーリングループとディスパッチロジックを管理する
 type Orchestrator struct {
-	taskClient         TaskClient
-	dispatcher         WorkflowDispatcher
-	state              *AgentState
-	pollInterval       time.Duration
-	statusMapping      clickup.StatusMapping
-	logger             *slog.Logger
-	retryTimers        map[string]*retryEntry
-	retryMu            sync.Mutex
-	ctx                context.Context
-	done               bool // shutdown が完了したかどうか
-	maxConcurrentTasks int  // 0 は無制限
+	taskClient    TaskClient
+	dispatcher    WorkflowDispatcher
+	state         *AgentState
+	limiter       *ConcurrencyLimiter
+	pollInterval  time.Duration
+	statusMapping clickup.StatusMapping
+	logger        *slog.Logger
+	retryTimers   map[string]*retryEntry
+	retryMu       sync.Mutex
+	ctx           context.Context
+	done          bool // shutdown が完了したかどうか
 }
 
 type retryEntry struct {
@@ -51,20 +50,22 @@ type retryEntry struct {
 	timer   *time.Timer
 }
 
-// New は新しい Orchestrator を返す
-func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logger *slog.Logger) *Orchestrator {
+// New は新しい Orchestrator を返す。
+// limiter が nil の場合は並行数制限なし。
+// 複数 Orchestrator 間で ConcurrencyLimiter を共有することで、グローバルな並行タスク数制限を実現できる。
+func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logger *slog.Logger, limiter *ConcurrencyLimiter) *Orchestrator {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Orchestrator{
-		taskClient:         taskClient,
-		dispatcher:         dispatcher,
-		state:              NewAgentState(),
-		pollInterval:       cfg.PollInterval,
-		statusMapping:      cfg.StatusMapping,
-		logger:             logger,
-		retryTimers:        make(map[string]*retryEntry),
-		maxConcurrentTasks: cfg.MaxConcurrentTasks,
+		taskClient:    taskClient,
+		dispatcher:    dispatcher,
+		state:         NewAgentState(),
+		limiter:       limiter,
+		pollInterval:  cfg.PollInterval,
+		statusMapping: cfg.StatusMapping,
+		logger:        logger,
+		retryTimers:   make(map[string]*retryEntry),
 	}
 }
 
@@ -123,12 +124,10 @@ func (o *Orchestrator) tick(ctx context.Context) {
 	}
 
 	for _, task := range tasks {
-		if o.maxConcurrentTasks > 0 && o.state.ActiveCount() >= o.maxConcurrentTasks {
-			o.logger.Info("max concurrent tasks reached, skipping remaining tasks this tick", "limit", o.maxConcurrentTasks)
-			break
-		}
 		if o.statusMapping.IsTriggerStatus(task.Status) && !o.hasRetryPending(task.ID) {
-			o.dispatch(ctx, task, 1)
+			if !o.dispatch(ctx, task, 1) {
+				break
+			}
 		}
 	}
 }
@@ -145,7 +144,7 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 
 		if o.statusMapping.IsTerminalStatus(task.Status) {
 			o.logger.Info("task reached terminal status, releasing", "task_id", taskID, "status", task.Status)
-			o.state.Release(taskID)
+			o.release(taskID)
 			continue
 		}
 
@@ -155,22 +154,29 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 
 		// 処理中でも終端でもない場合（トリガー状態に戻った場合や手動変更を含む）はリリース
 		o.logger.Info("reconciliation_release", "task_id", taskID, "status", task.Status)
-		o.state.Release(taskID)
+		o.release(taskID)
 	}
 }
 
 // dispatch はタスクのディスパッチを行う。attempt はリトライ回数で、失敗時に scheduleRetry に引き継がれる。
-func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) {
-	if !o.state.ClaimIfUnderLimit(task.ID, o.maxConcurrentTasks) {
+// 並行数上限に達した場合は false を返し、呼び出し元で残りタスクの処理を打ち切れるようにする。
+func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) bool {
+	if !o.state.Claim(task.ID) {
 		o.logger.Warn("task_already_claimed", "task_id", task.ID, "status", task.Status)
-		return
+		return true
+	}
+
+	if !o.limiter.TryAcquire() {
+		o.logger.Info("max concurrent tasks reached", "task_id", task.ID)
+		o.state.Release(task.ID)
+		return false
 	}
 
 	phase, err := o.statusMapping.PhaseFromStatus(task.Status)
 	if err != nil {
 		o.logger.Error("failed to determine phase", "task_id", task.ID, "status", task.Status, "error", err)
-		o.state.Release(task.ID)
-		return
+		o.release(task.ID)
+		return true
 	}
 
 	phaseStr := string(phase)
@@ -179,9 +185,9 @@ func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt 
 	processingStatus := o.statusMapping.ProcessingStatusFor(phase)
 	if err := o.taskClient.UpdateTaskStatus(ctx, task.ID, processingStatus); err != nil {
 		tl.Error("failed to update task status", "status", processingStatus, "error", err)
-		o.state.Release(task.ID)
+		o.release(task.ID)
 		o.scheduleRetry(task.ID, phaseStr, attempt, err)
-		return
+		return true
 	}
 
 	successStatus := o.statusMapping.SuccessStatusFor(phase)
@@ -192,13 +198,20 @@ func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt 
 		if revertErr := o.taskClient.UpdateTaskStatus(ctx, task.ID, errorStatus); revertErr != nil {
 			tl.Error("failed to revert task status", "status", errorStatus, "error", revertErr)
 		}
-		o.state.Release(task.ID)
+		o.release(task.ID)
 		o.scheduleRetry(task.ID, phaseStr, attempt, err)
-		return
+		return true
 	}
 
 	o.state.MarkRunning(task.ID)
 	tl.Info("task dispatched")
+	return true
+}
+
+// release はローカル state とグローバル limiter の両方を解放する
+func (o *Orchestrator) release(taskID string) {
+	o.state.Release(taskID)
+	o.limiter.Release()
 }
 
 const (
@@ -282,9 +295,10 @@ func (o *Orchestrator) handleRetry(taskID string, phase string, attempt int) {
 
 	if o.statusMapping.IsTriggerStatus(task.Status) {
 		tl.Info("retrying dispatch", "attempt", attempt)
-		o.dispatch(ctx, *task, attempt+1)
+		_ = o.dispatch(ctx, *task, attempt+1)
 	} else {
 		tl.Info("task no longer in trigger status, releasing", "status", task.Status)
+		// リトライ待ちに入る前の dispatch 失敗パスで既に limiter は解放済みのため、state のみ解放する
 		o.state.Release(taskID)
 	}
 }

@@ -115,12 +115,36 @@ jobs:
           TASK_ID: ${{ inputs.task_id }}
         run: |
           OUTPUT_FILE="/home/runner/work/_temp/claude-execution-output.json"
-          SPEC_RESULT=$(jq 'objects | select(.type == "result") | .result // ""' "$OUTPUT_FILE" | jq -sr 'last // ""')
+          # ファイル形式をデバッグ出力
+          echo "=== File info ==="
+          wc -l "$OUTPUT_FILE"
+          head -1 "$OUTPUT_FILE" | cut -c1-200
+          echo "=== Searching for result ==="
+          # JSONL の各行からオブジェクトのみ抽出し result を取得
+          python3 -c "
+import json, sys
+result = ''
+with open(sys.argv[1]) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            if isinstance(obj, dict) and obj.get('type') == 'result':
+                result = obj.get('result', '')
+        except json.JSONDecodeError:
+            pass
+with open('/tmp/spec_payload.json', 'w') as out:
+    json.dump({'description': result}, out)
+print(f'Result length: {len(result)}')
+print(f'Result preview: {result[:200]}...' if len(result) > 200 else f'Result: {result}')
+" "$OUTPUT_FILE"
           curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
             -X PUT "https://api.clickup.com/api/v2/task/${TASK_ID}" \
             -H "Authorization: ${CLICKUP_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n --arg desc "$SPEC_RESULT" '{description: $desc}')"
+            -d @/tmp/spec_payload.json
 
       - name: Record error to ClickUp
         if: failure()

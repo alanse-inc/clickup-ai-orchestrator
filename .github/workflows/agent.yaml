@@ -72,7 +72,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           allowed_bots: '*'
-          allowed_tools: "Bash,Read,Write,Edit,Glob,Grep"
+          additional_permissions: "Bash(*),Read(*),Write(*),Edit(*),Glob(*),Grep(*)"
           prompt: |
             以下のタスク情報に基づいてコードを実装し、PR を作成してください。
             タスクの説明が詳細な仕様書の場合はそれに従い、

@@ -144,6 +144,92 @@ func TestTriggerWorkflow(t *testing.T) {
 	}
 }
 
+func TestDispatcher_Ping(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		closeServer bool
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:       "success",
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
+			name:        "auth error 401",
+			statusCode:  http.StatusUnauthorized,
+			wantErr:     true,
+			errContains: "unexpected status code: 401",
+		},
+		{
+			name:        "server error 500",
+			statusCode:  http.StatusInternalServerError,
+			wantErr:     true,
+			errContains: "unexpected status code: 500",
+		},
+		{
+			name:        "connection refused",
+			closeServer: true,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedReq *http.Request
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedReq = r
+				w.WriteHeader(tt.statusCode)
+			}))
+
+			d := NewDispatcher(NewPATAuthenticator("test-pat"), "test-owner", "test-repo", "agent.yaml")
+			d.httpClient = server.Client()
+			d.httpClient.Transport = &rewriteTransport{
+				base:    http.DefaultTransport,
+				baseURL: server.URL,
+			}
+
+			if tt.closeServer {
+				server.Close()
+			} else {
+				defer server.Close()
+			}
+
+			err := d.Ping(context.Background())
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" {
+					if !strings.Contains(err.Error(), tt.errContains) {
+						t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+					}
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// 正常ケースのリクエスト検証
+			if capturedReq.URL.Path != "/rate_limit" {
+				t.Errorf("path = %s, want /rate_limit", capturedReq.URL.Path)
+			}
+			if got := capturedReq.Header.Get("Authorization"); got != "Bearer test-pat" {
+				t.Errorf("Authorization = %s, want Bearer test-pat", got)
+			}
+			if got := capturedReq.Header.Get("Accept"); got != "application/vnd.github.v3+json" {
+				t.Errorf("Accept = %s, want application/vnd.github.v3+json", got)
+			}
+		})
+	}
+}
+
 // rewriteTransport は全てのリクエストをモックサーバーに転送するカスタムトランスポート
 type rewriteTransport struct {
 	base    http.RoundTripper

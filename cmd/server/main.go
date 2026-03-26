@@ -14,6 +14,7 @@ import (
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/clickup"
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/config"
 	gh "github.com/rikeda71/clickup-ai-orchestrator/internal/github"
+	"github.com/rikeda71/clickup-ai-orchestrator/internal/health"
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/logging"
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/orchestrator"
 )
@@ -51,14 +52,25 @@ func main() {
 		}
 	}
 
+	orchCfg := orchestrator.Config{
+		PollInterval:  time.Duration(cfg.PollIntervalMS) * time.Millisecond,
+		StatusMapping: cfg.StatusMapping,
+	}
+
+	// 全プロジェクトで共有するグローバル並行数リミッタ
+	limiter := orchestrator.NewConcurrencyLimiter(cfg.MaxConcurrentTasks)
+
+	dispatchers := make([]*gh.Dispatcher, len(cfg.Projects))
+	for i, proj := range cfg.Projects {
+		dispatchers[i] = gh.NewDispatcher(githubAuth, proj.GitHubOwner, proj.GitHubRepo, proj.GitHubWorkflowFile)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	mux.Handle("GET /healthz", health.NewHandler(clickupClients[0], dispatchers[0]))
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
@@ -85,19 +97,10 @@ func main() {
 		}
 	}()
 
-	orchCfg := orchestrator.Config{
-		PollInterval:  time.Duration(cfg.PollIntervalMS) * time.Millisecond,
-		StatusMapping: cfg.StatusMapping,
-	}
-
-	// 全プロジェクトで共有するグローバル並行数リミッタ
-	limiter := orchestrator.NewConcurrencyLimiter(cfg.MaxConcurrentTasks)
-
 	var wg sync.WaitGroup
 	for i, proj := range cfg.Projects {
-		githubDispatcher := gh.NewDispatcher(githubAuth, proj.GitHubOwner, proj.GitHubRepo, proj.GitHubWorkflowFile)
 		projectLogger := logger.With("project", proj.GitHubOwner+"/"+proj.GitHubRepo)
-		orch := orchestrator.New(clickupClients[i], githubDispatcher, orchCfg, projectLogger, limiter)
+		orch := orchestrator.New(clickupClients[i], dispatchers[i], orchCfg, projectLogger, limiter)
 
 		slog.InfoContext(ctx, "service_started",
 			"poll_interval_ms", cfg.PollIntervalMS,

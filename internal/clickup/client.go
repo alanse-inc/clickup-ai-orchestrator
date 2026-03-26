@@ -172,6 +172,22 @@ func (c *Client) GetStatuses(ctx context.Context) ([]string, error) {
 	return statuses, nil
 }
 
+// Ping は ClickUp API への疎通を確認する。
+// GET /user を呼び出し、認証が有効かつ API が到達可能かを検証する。
+func (c *Client) Ping(ctx context.Context) error {
+	url := c.baseURL + "/user"
+	resp, err := c.doRequest(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("pinging ClickUp API: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // UpdateTaskStatus はタスクのステータスを更新する
 func (c *Client) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
 	url := fmt.Sprintf("%s/task/%s", c.baseURL, taskID)

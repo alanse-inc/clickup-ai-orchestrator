@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -224,5 +225,75 @@ func TestUpdateTaskStatusErrorResponse(t *testing.T) {
 	err := client.UpdateTaskStatus(context.Background(), "task1", "closed")
 	if err == nil {
 		t.Fatal("expected error for 403 response, got nil")
+	}
+}
+
+func TestClient_Ping(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		closeServer bool
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:       "success",
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
+			name:        "auth error 401",
+			statusCode:  http.StatusUnauthorized,
+			wantErr:     true,
+			errContains: "unexpected status code: 401",
+		},
+		{
+			name:        "server error 500",
+			statusCode:  http.StatusInternalServerError,
+			wantErr:     true,
+			errContains: "unexpected status code: 500",
+		},
+		{
+			name:        "connection refused",
+			closeServer: true,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v2/user" {
+					t.Errorf("unexpected path: %s", r.URL.Path)
+				}
+				w.WriteHeader(tt.statusCode)
+			}))
+
+			client := newTestClient(server, "list123")
+
+			if tt.closeServer {
+				server.Close()
+			} else {
+				defer server.Close()
+			}
+
+			err := client.Ping(context.Background())
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errContains != "" {
+					if !strings.Contains(err.Error(), tt.errContains) {
+						t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+					}
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }

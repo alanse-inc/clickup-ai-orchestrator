@@ -8,7 +8,11 @@ RUN CGO_ENABLED=0 go build -o /server ./cmd/server
 
 FROM debian:bookworm-slim
 
-RUN useradd -r -s /usr/sbin/nologin nonroot
+# clickup へのリクエストに ca-certificates が必要
+RUN apt update \
+    && apt install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && RUN useradd -r -s /usr/sbin/nologin nonroot
 COPY --from=builder /server /usr/local/bin/server
 USER nonroot
 EXPOSE 8080

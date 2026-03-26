@@ -47,6 +47,7 @@ jobs:
         if: inputs.phase == 'SPEC'
         uses: anthropics/claude-code-action@v1
         with:
+          allowed_bots: '*'
           prompt: |
             以下の ClickUp タスクの内容をもとに、実装仕様書を Markdown で作成してください。
             リポジトリの既存コードを読み込み、現在のアーキテクチャ・コーディングスタイルを踏まえて仕様を作成してください。
@@ -69,6 +70,7 @@ jobs:
         if: inputs.phase == 'CODE'
         uses: anthropics/claude-code-action@v1
         with:
+          allowed_bots: '*'
           prompt: |
             以下のタスク情報に基づいてコードを実装し、PR を作成してください。
             タスクの説明が詳細な仕様書の場合はそれに従い、

@@ -67,7 +67,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewHandler(&mockPinger{tt.clickupErr}, &mockPinger{tt.githubErr})
 
-			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
 

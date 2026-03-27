@@ -177,54 +177,190 @@ func TestGetStatuses(t *testing.T) {
 }
 
 func TestGetStatusesErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer server.Close()
+	tests := []struct {
+		name        string
+		statusCode  int
+		body        string
+		errContains string
+	}{
+		{
+			name:        "500 no body",
+			statusCode:  http.StatusInternalServerError,
+			errContains: "unexpected status code: 500",
+		},
+		{
+			name:        "429 with rate limit body",
+			statusCode:  http.StatusTooManyRequests,
+			body:        `{"err": "Rate limit exceeded"}`,
+			errContains: `unexpected status code: 429: {"err": "Rate limit exceeded"}`,
+		},
+		{
+			name:        "401 with auth error body",
+			statusCode:  http.StatusUnauthorized,
+			body:        `{"err": "Token invalid"}`,
+			errContains: `unexpected status code: 401: {"err": "Token invalid"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer server.Close()
 
-	client := newTestClient(server, "list123")
-	_, err := client.GetStatuses(context.Background())
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
+			client := newTestClient(server, "list123")
+			_, err := client.GetStatuses(context.Background())
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+			}
+		})
 	}
 }
 
 func TestGetTasksErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer server.Close()
+	tests := []struct {
+		name        string
+		statusCode  int
+		body        string
+		errContains string
+	}{
+		{
+			name:        "500 no body",
+			statusCode:  http.StatusInternalServerError,
+			errContains: "unexpected status code: 500",
+		},
+		{
+			name:        "429 with rate limit body",
+			statusCode:  http.StatusTooManyRequests,
+			body:        `{"err": "Rate limit exceeded"}`,
+			errContains: `unexpected status code: 429: {"err": "Rate limit exceeded"}`,
+		},
+		{
+			name:        "401 with auth error body",
+			statusCode:  http.StatusUnauthorized,
+			body:        `{"err": "Token invalid"}`,
+			errContains: `unexpected status code: 401: {"err": "Token invalid"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer server.Close()
 
-	client := newTestClient(server, "list123")
-	_, err := client.GetTasks(context.Background())
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
+			client := newTestClient(server, "list123")
+			_, err := client.GetTasks(context.Background())
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+			}
+		})
 	}
 }
 
 func TestGetTaskErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
+	tests := []struct {
+		name        string
+		statusCode  int
+		body        string
+		errContains string
+	}{
+		{
+			name:        "404 no body",
+			statusCode:  http.StatusNotFound,
+			errContains: "unexpected status code: 404",
+		},
+		{
+			name:        "429 with rate limit body",
+			statusCode:  http.StatusTooManyRequests,
+			body:        `{"err": "Rate limit exceeded"}`,
+			errContains: `unexpected status code: 429: {"err": "Rate limit exceeded"}`,
+		},
+		{
+			name:        "401 with auth error body",
+			statusCode:  http.StatusUnauthorized,
+			body:        `{"err": "Token invalid"}`,
+			errContains: `unexpected status code: 401: {"err": "Token invalid"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer server.Close()
 
-	client := newTestClient(server, "list123")
-	_, err := client.GetTask(context.Background(), "nonexistent")
-	if err == nil {
-		t.Fatal("expected error for 404 response, got nil")
+			client := newTestClient(server, "list123")
+			_, err := client.GetTask(context.Background(), "nonexistent")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+			}
+		})
 	}
 }
 
 func TestUpdateTaskStatusErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-	defer server.Close()
+	tests := []struct {
+		name        string
+		statusCode  int
+		body        string
+		errContains string
+	}{
+		{
+			name:        "403 no body",
+			statusCode:  http.StatusForbidden,
+			errContains: "unexpected status code: 403",
+		},
+		{
+			name:        "429 with rate limit body",
+			statusCode:  http.StatusTooManyRequests,
+			body:        `{"err": "Rate limit exceeded"}`,
+			errContains: `unexpected status code: 429: {"err": "Rate limit exceeded"}`,
+		},
+		{
+			name:        "401 with auth error body",
+			statusCode:  http.StatusUnauthorized,
+			body:        `{"err": "Token invalid"}`,
+			errContains: `unexpected status code: 401: {"err": "Token invalid"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer server.Close()
 
-	client := newTestClient(server, "list123")
-	err := client.UpdateTaskStatus(context.Background(), "task1", "closed")
-	if err == nil {
-		t.Fatal("expected error for 403 response, got nil")
+			client := newTestClient(server, "list123")
+			err := client.UpdateTaskStatus(context.Background(), "task1", "closed")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errContains)
+			}
+		})
 	}
 }
 
@@ -232,6 +368,7 @@ func TestClient_Ping(t *testing.T) {
 	tests := []struct {
 		name        string
 		statusCode  int
+		body        string
 		closeServer bool
 		wantErr     bool
 		errContains string
@@ -254,6 +391,20 @@ func TestClient_Ping(t *testing.T) {
 			errContains: "unexpected status code: 500",
 		},
 		{
+			name:        "429 with rate limit body",
+			statusCode:  http.StatusTooManyRequests,
+			body:        `{"err": "Rate limit exceeded"}`,
+			wantErr:     true,
+			errContains: `unexpected status code: 429: {"err": "Rate limit exceeded"}`,
+		},
+		{
+			name:        "401 with auth error body",
+			statusCode:  http.StatusUnauthorized,
+			body:        `{"err": "Token invalid"}`,
+			wantErr:     true,
+			errContains: `unexpected status code: 401: {"err": "Token invalid"}`,
+		},
+		{
 			name:        "connection refused",
 			closeServer: true,
 			wantErr:     true,
@@ -267,6 +418,9 @@ func TestClient_Ping(t *testing.T) {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
 			}))
 
 			client := newTestClient(server, "list123")
@@ -293,6 +447,27 @@ func TestClient_Ping(t *testing.T) {
 
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func Test_readErrorBody(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", "", ""},
+		{"short json", `{"err":"foo"}`, `{"err":"foo"}`},
+		{"trims whitespace", "body\n", "body"},
+		{"truncates at 512 bytes", strings.Repeat("a", 600), strings.Repeat("a", 512)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := readErrorBody(strings.NewReader(tt.input))
+			if got != tt.want {
+				t.Errorf("readErrorBody() = %q, want %q", got, tt.want)
 			}
 		})
 	}

@@ -57,6 +57,10 @@ jobs:
           echo "task_description<<${DELIMITER}" >> "$GITHUB_OUTPUT"
           echo "$RESPONSE" | jq -r '.description // ""' >> "$GITHUB_OUTPUT"
           echo "${DELIMITER}" >> "$GITHUB_OUTPUT"
+          DELIMITER_TC="CLICKUP_TC_$(openssl rand -hex 8)"
+          echo "task_text_content<<${DELIMITER_TC}" >> "$GITHUB_OUTPUT"
+          echo "$RESPONSE" | jq -r '.text_content // ""' >> "$GITHUB_OUTPUT"
+          echo "${DELIMITER_TC}" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code (SPEC)
         id: claude_spec
@@ -160,14 +164,22 @@ jobs:
         env:
           CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
           TASK_ID: ${{ inputs.task_id }}
+          ORIGINAL: ${{ steps.fetch_task.outputs.task_text_content }}
         run: |
-          jq '{description: ([.. | objects | select(.type == "result") | .result // empty] | last)}' \
-            /home/runner/work/_temp/claude-execution-output.json > /tmp/spec_payload.json
+          SPEC=$(jq -r '[.. | objects | select(.type == "result") | .result // empty] | last // ""' \
+            /home/runner/work/_temp/claude-execution-output.json)
+          if [ -z "$SPEC" ]; then
+            echo "No spec output found, skipping description update"
+            exit 0
+          fi
+          CLEAN_ORIGINAL=$(printf '%s' "$ORIGINAL" | awk '/^---$/{found_sep=1; buf=$0; next} found_sep && /^$/{buf=buf ORS; next} found_sep && /^## AI Generated Spec/{exit} found_sep{print buf; print; buf=""; found_sep=0; next} {print} END{if(buf) printf "%s", buf}' | awk '{lines[NR]=$0} END{e=NR; while(e>0 && lines[e]=="") e--; for(i=1;i<=e;i++) print lines[i]}')
+          COMBINED=$(printf '%s\n\n---\n\n## AI Generated Spec\n\n%s' "$CLEAN_ORIGINAL" "$SPEC")
+          jq -n --arg md "$COMBINED" '{markdown_description: $md}' | \
           curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
             -X PUT "https://api.clickup.com/api/v2/task/${TASK_ID}" \
             -H "Authorization: ${CLICKUP_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d @/tmp/spec_payload.json
+            -d @-
 
       - name: Record error to ClickUp
         if: failure()

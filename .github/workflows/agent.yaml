@@ -161,13 +161,18 @@ jobs:
           CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
           TASK_ID: ${{ inputs.task_id }}
         run: |
-          jq '{description: ([.. | objects | select(.type == "result") | .result // empty] | last)}' \
-            /home/runner/work/_temp/claude-execution-output.json > /tmp/spec_payload.json
+          ORIGINAL=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
+            "https://api.clickup.com/api/v2/task/${TASK_ID}" \
+            -H "Authorization: ${CLICKUP_API_TOKEN}" | jq -r '.description // ""')
+          SPEC=$(jq -r '[.. | objects | select(.type == "result") | .result // empty] | last' \
+            /home/runner/work/_temp/claude-execution-output.json)
+          COMBINED=$(printf '%s\n\n---\n\n## AI Generated Spec\n\n%s' "$ORIGINAL" "$SPEC")
+          jq -n --arg md "$COMBINED" '{markdown_description: $md}' | \
           curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
             -X PUT "https://api.clickup.com/api/v2/task/${TASK_ID}" \
             -H "Authorization: ${CLICKUP_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d @/tmp/spec_payload.json
+            -d @-
 
       - name: Record error to ClickUp
         if: failure()

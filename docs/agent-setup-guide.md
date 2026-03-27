@@ -67,9 +67,21 @@ GitHub App のインストールトークンを生成するために使用しま
 1. オーケストレーターの環境変数に設定済みの `GITHUB_APP_ID` と `GITHUB_APP_PRIVATE_KEY` の値を取得
 2. 対象リポジトリの GitHub Secrets に同じ値を登録
 
-> **Tip**: Organization レベルの Secret として設定すると、全リポジトリで共有できます。未設定の場合は `GITHUB_TOKEN` にフォールバックしますが、CI は自動トリガーされません。
+> **Tip**: Organization レベルの Secret として設定すると、全リポジトリで共有できます。
 
-### 3.4 `CLICKUP_AGENT_ERROR_FIELD_ID`（オプション）
+### 3.4 `GITHUB_PAT`（代替）
+
+GitHub App を利用できない場合の代替として、Personal Access Token も使用できます。
+
+**必要な権限（Fine-grained token）:**
+- **Contents**: Read and write
+- **Pull requests**: Read and write
+
+GitHub Secrets に `GITHUB_PAT` として登録してください。
+
+> **Note**: トークンの優先順位は **GitHub App → GITHUB_PAT → GITHUB_TOKEN** です。いずれも未設定の場合は `GITHUB_TOKEN` にフォールバックしますが、CI は自動トリガーされません。
+
+### 3.5 `CLICKUP_AGENT_ERROR_FIELD_ID`（オプション）
 
 ワークフロー失敗時にエラーメッセージを ClickUp タスクのカスタムフィールドに記録するために使用します。設定しない場合、エラー記録ステップはスキップされます。
 

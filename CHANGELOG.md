@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.1.0](https://github.com/alanse-inc/clickup-ai-orchestrator/compare/v1.0.4...v1.1.0) (2026-03-27)
+
+
+### Features
+
+* CODE フェーズで ClickUp に PR リンクをコメント投稿 & 導入ガイド追加 ([928db83](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/928db83935842405355755c8912dbc37913978b8))
+* ヘルスチェックエンドポイントに依存サービスの接続状態を追加 ([#58](https://github.com/alanse-inc/clickup-ai-orchestrator/issues/58)) ([fc8a1e3](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/fc8a1e399fdaadd1ae2ae94a4f9f0eba69faf33c))
+
+
+### Bug Fixes
+
+* agent ジョブに contents:write, pull-requests:write 権限を追加 ([5d07503](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/5d07503a9f3023c4425c1dbe8aafc317bef9ae99))
+* agent.yaml の認証を claude_code_oauth_token に変更 ([9f982a8](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/9f982a81287eac2638ea89874cde3895a3d08b4e))
+* claude-code-action に allowed_bots を追加 ([0278c1d](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/0278c1dabe19822b75b3d0aa68da2dc0d78deb1d))
+* CODE フェーズに additional_permissions を追加 ([2b8b5d0](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/2b8b5d02d61f600ab6873b4bbd9888080b27193a))
+* CODE フェーズに allowed_tools を追加 ([1ef11d2](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/1ef11d2768205bf63a415967a4ec65bf62a5aab1))
+* CODE フェーズの権限を settings パラメータで設定 ([6ce143c](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/6ce143cad99293d4504c4ea38aff6447e5cef570))
+* extract-spec-result.py を JSON 配列形式にも対応 ([ac2e659](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/ac2e6599c18f91adadcee5f59cbc06d6646dc3ad))
+* GitHub App トークンで Bot PR の CI 自動トリガーをサポート ([#59](https://github.com/alanse-inc/clickup-ai-orchestrator/issues/59)) ([d2ec3de](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/d2ec3deff004cdadca4dd2bb53d1aad5bad5205b))
+* SPEC フェーズに show_full_output を追加 ([2a98857](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/2a9885731c46ca4c652a4c303f70a948d63aee3a))
+* SPEC 結果を実行ログファイルから抽出して ClickUp Description に書き込む ([d8afe54](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/d8afe54795cf1075ea319e75fb0b43cc126a6248))
+* SPEC 結果抽出の jq フィルタを修正 ([6cfdf97](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/6cfdf975aab9edaee0438ce3a03e33e4357ce97e))
+* SPEC 結果抽出を python3 に変更しファイル経由で ClickUp に送信 ([9dd17bf](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/9dd17bf9d9f95935a846ec736b493dc9e7f1c3ad))
+* SPEC 結果抽出を外部スクリプトに分離 ([5c9b2ee](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/5c9b2ee8161ee0d7722918bb87dcdb21f9e8d091))
+
 ## [1.0.4](https://github.com/alanse-inc/clickup-ai-orchestrator/compare/v1.0.3...v1.0.4) (2026-03-26)
 
 

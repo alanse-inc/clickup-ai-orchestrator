@@ -30,16 +30,19 @@ jobs:
     steps:
       # GITHUB_TOKEN で push/PR 作成すると CI がトリガーされない GitHub の仕様を回避するため、
       # GitHub App トークン → GITHUB_PAT → GITHUB_TOKEN の優先順位でトークンを選択する。
-      # Org レベルの Secret に以下を設定すると全リポジトリで CI 自動トリガーが有効になる:
-      #   ALANSE_CI_APP_ID          - GitHub App の App ID
-      #   ALANSE_CI_APP_PRIVATE_KEY - GitHub App の Private Key (PEM)
+      #
+      # Org レベルの Secret に設定すると全リポジトリで CI 自動トリガーが有効になる。
+      # Secret 名は自組織に合わせて変更すること（例: MYORG_CI_APP_ID / MYORG_CI_APP_PRIVATE_KEY）。
+      # app-id / private-key を Org Secret 名に差し替える場合:
+      #   app-id: ${{ secrets.MYORG_CI_APP_ID }}
+      #   private-key: ${{ secrets.MYORG_CI_APP_PRIVATE_KEY }}
       - name: Generate GitHub App token
         id: app_token
         continue-on-error: true
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.ALANSE_CI_APP_ID }}
-          private-key: ${{ secrets.ALANSE_CI_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.GITHUB_APP_ID }}
+          private-key: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@v6
 

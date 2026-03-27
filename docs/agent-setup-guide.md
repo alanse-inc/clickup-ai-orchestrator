@@ -54,7 +54,7 @@ Claude Code Action の実行に必要な OAuth トークンです。
 3. 対象リポジトリを選択してインストール
 4. 完了すると `CLAUDE_CODE_OAUTH_TOKEN` が自動的に GitHub Secrets に登録されます
 
-### 3.3 `ALANSE_CI_APP_ID` / `ALANSE_CI_APP_PRIVATE_KEY`（推奨）
+### 3.3 `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY`（推奨）
 
 GitHub App のインストールトークンを生成するために使用します。設定すると、Claude Code が作成した PR で CI ワークフローが自動的にトリガーされます。
 
@@ -65,9 +65,9 @@ GitHub App のインストールトークンを生成するために使用しま
 **設定手順:**
 
 1. オーケストレーターの環境変数に設定済みの `GITHUB_APP_ID` と `GITHUB_APP_PRIVATE_KEY` の値を取得
-2. Organization の Settings > Secrets and variables > Actions で以下を登録:
-   - `ALANSE_CI_APP_ID` ← `GITHUB_APP_ID` の値
-   - `ALANSE_CI_APP_PRIVATE_KEY` ← `GITHUB_APP_PRIVATE_KEY` の値
+2. リポジトリまたは Organization の Secrets に登録
+
+> **Tip**: Organization レベルの Secret として設定する場合は、他用途との衝突を避けるために `MYORG_CI_APP_ID` / `MYORG_CI_APP_PRIVATE_KEY` のように組織名を含む名前に変更し、agent.yaml のコメントに従って `app-id` / `private-key` を差し替えてください。
 
 > **Tip**: Organization レベルの Secret として設定すると、全リポジトリで共有できます。
 

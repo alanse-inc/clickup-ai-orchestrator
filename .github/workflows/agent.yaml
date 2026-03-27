@@ -168,7 +168,7 @@ jobs:
             echo "No spec output found, skipping description update"
             exit 0
           fi
-          CLEAN_ORIGINAL=$(printf '%s' "$ORIGINAL" | awk '/^---$/{found_sep=1; buf=$0; next} found_sep && /^$/{buf=buf ORS; next} found_sep && /^## AI Generated Spec/{exit} found_sep{print buf $0; buf=""; found_sep=0; next} {print}')
+          CLEAN_ORIGINAL=$(printf '%s' "$ORIGINAL" | awk '/^---$/{found_sep=1; buf=$0; next} found_sep && /^$/{buf=buf ORS; next} found_sep && /^## AI Generated Spec/{exit} found_sep{print buf; print; buf=""; found_sep=0; next} {print}' | awk '{lines[NR]=$0} END{e=NR; while(e>0 && lines[e]=="") e--; for(i=1;i<=e;i++) print lines[i]}')
           COMBINED=$(printf '%s\n\n---\n\n## AI Generated Spec\n\n%s' "$CLEAN_ORIGINAL" "$SPEC")
           jq -n --arg md "$COMBINED" '{markdown_description: $md}' | \
           curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \

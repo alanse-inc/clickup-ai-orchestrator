@@ -55,7 +55,7 @@ projects:
 | 変数名 | 必須 | 説明 |
 |--------|------|------|
 | `CLICKUP_API_TOKEN` | Yes | ClickUp API トークン |
-| `GITHUB_PAT` | Yes (*1) | GitHub Personal Access Token |
+| `GITHUB_PAT` | Yes (*1) | GitHub Personal Access Token（classic: `repo`, `workflow` / fine-grained: Contents + Actions の Read and write） |
 | `GITHUB_APP_ID` | Yes (*1) | GitHub App ID |
 | `GITHUB_APP_INSTALLATION_ID` | Yes (*1) | GitHub App Installation ID |
 | `GITHUB_APP_PRIVATE_KEY` | Yes (*1) | GitHub App Private Key（base64 PEM。macOS: `base64 -i key.pem \| tr -d '\n'` / Linux: `base64 -w 0 < key.pem`） |
@@ -95,6 +95,21 @@ docker run --rm \
   -v "$(pwd)/projects.yaml":/projects.yaml:ro \
   ghcr.io/alanse-inc/clickup-ai-orchestrator:latest
 ```
+
+<details>
+<summary>projects.yaml をイメージに埋め込む場合</summary>
+
+```dockerfile
+FROM ghcr.io/alanse-inc/clickup-ai-orchestrator:latest
+COPY projects.yaml /projects.yaml
+ENV PROJECTS_FILE=/projects.yaml
+```
+
+```bash
+docker build -t my-orchestrator .
+docker run --rm --env-file .env my-orchestrator
+```
+</details>
 
 **ローカル実行:**
 

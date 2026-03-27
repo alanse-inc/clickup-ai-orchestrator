@@ -35,6 +35,31 @@ func NewDispatcher(auth Authenticator, owner, repo, workflowFile string) *Dispat
 	}
 }
 
+// Ping は GitHub API への疎通を確認する。
+// GET /rate_limit を呼び出し、認証が有効かつ API が到達可能かを検証する。
+func (d *Dispatcher) Ping(ctx context.Context) error {
+	url := githubAPIBase + "/rate_limit"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating ping request: %w", err)
+	}
+	if err := d.auth.SetAuth(req); err != nil {
+		return fmt.Errorf("setting auth: %w", err)
+	}
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("pinging GitHub API: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 type dispatchRequest struct {
 	Ref    string            `json:"ref"`
 	Inputs map[string]string `json:"inputs"`

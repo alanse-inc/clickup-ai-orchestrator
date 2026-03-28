@@ -6,7 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "go fmt ./... && go vet ./..."
+            "command": "FILE_PATH=$(jq -r '.tool_input.file_path // empty') && if [ -n \"$FILE_PATH\" ] && echo \"$FILE_PATH\" | grep -q '\\.go$'; then DIR=$(dirname \"$FILE_PATH\") && golangci-lint fmt \"$DIR\" && golangci-lint run --fix \"$DIR\"; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat) && COMMAND=$(echo \"$INPUT\" | jq -r '.tool_input.command // empty') && if echo \"$COMMAND\" | grep -qE '^git commit'; then cd \"$(echo \"$INPUT\" | jq -r '.cwd // \".\"')\" && golangci-lint run ./... && go test ./... || (echo 'BLOCKED: lint or test failed. Fix before committing.' >&2; exit 2); fi"
           }
         ]
       }

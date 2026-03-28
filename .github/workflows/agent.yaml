@@ -131,7 +131,10 @@ jobs:
             実装手順:
             1. feature/clickup-${{ inputs.task_id }} ブランチを作成
             2. タスク内容（仕様があればそれも含む）に基づいてコードを変更
-            3. テストを実行して通ることを確認
+            3. 品質チェックを実行し、すべてパスするまで修正する:
+               - golangci-lint fmt ./...（フォーマット自動修正）
+               - golangci-lint run ./...（Lint・静的解析）
+               - go test ./...（全テスト）
             4. コミット＆Push
             5. gh pr create で PR を作成。description の末尾に必ず以下の行を含めること:
                Closes CU-${{ inputs.task_id }}

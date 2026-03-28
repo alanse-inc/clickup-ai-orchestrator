@@ -134,3 +134,36 @@ func resolveStatusMapping(raw *rawStatusMappingConfig) (clickup.StatusMapping, e
 
 	return sm, nil
 }
+
+// validateStatusMapping はステータスマッピングの空文字チェックと重複チェックを行う
+func validateStatusMapping(sm clickup.StatusMapping) error {
+	type field struct {
+		name  string
+		value string
+	}
+	fields := []field{
+		{"ReadyForSpec", sm.ReadyForSpec},
+		{"GeneratingSpec", sm.GeneratingSpec},
+		{"SpecReview", sm.SpecReview},
+		{"ReadyForCode", sm.ReadyForCode},
+		{"Implementing", sm.Implementing},
+		{"PRReview", sm.PRReview},
+		{"Closed", sm.Closed},
+	}
+
+	for _, f := range fields {
+		if f.value == "" {
+			return fmt.Errorf("status mapping %s must not be empty", f.name)
+		}
+	}
+
+	seen := make(map[string]string, len(fields))
+	for _, f := range fields {
+		if prev, ok := seen[f.value]; ok {
+			return fmt.Errorf("duplicate status %q in mapping fields %s and %s", f.value, prev, f.name)
+		}
+		seen[f.value] = f.name
+	}
+
+	return nil
+}

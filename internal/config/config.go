@@ -6,8 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/rikeda71/clickup-ai-orchestrator/internal/clickup"
 )
 
 type Config struct {
@@ -159,33 +157,5 @@ func loadGitHubAuth(cfg *Config) error {
 	cfg.GitHubAppID = parsedAppID
 	cfg.GitHubAppInstallationID = parsedInstallID
 	cfg.GitHubAppPrivateKey = string(decodedKey)
-	return nil
-}
-
-func validateStatusMapping(sm clickup.StatusMapping) error {
-	fields := map[string]string{
-		"ReadyForSpec":   sm.ReadyForSpec,
-		"GeneratingSpec": sm.GeneratingSpec,
-		"SpecReview":     sm.SpecReview,
-		"ReadyForCode":   sm.ReadyForCode,
-		"Implementing":   sm.Implementing,
-		"PRReview":       sm.PRReview,
-		"Closed":         sm.Closed,
-	}
-
-	for name, val := range fields {
-		if val == "" {
-			return fmt.Errorf("status mapping %s must not be empty", name)
-		}
-	}
-
-	seen := make(map[string]string, len(fields))
-	for name, val := range fields {
-		if prev, ok := seen[val]; ok {
-			return fmt.Errorf("duplicate status %q in mapping fields %s and %s", val, prev, name)
-		}
-		seen[val] = name
-	}
-
 	return nil
 }

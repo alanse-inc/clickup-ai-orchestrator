@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/rikeda71/clickup-ai-orchestrator/internal/clickup"
-	"github.com/rikeda71/clickup-ai-orchestrator/internal/config"
 )
 
 func TestValidateStatuses(t *testing.T) {
@@ -67,9 +66,8 @@ func TestValidateStatuses(t *testing.T) {
 			defer server.Close()
 
 			client := clickup.NewClientWithBaseURL("test-token", "list123", server.URL+"/api/v2")
-			cfg := &config.Config{StatusMapping: sm}
 
-			err := validateStatuses(client, cfg)
+			err := validateStatuses(client, sm)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

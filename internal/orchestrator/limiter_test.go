@@ -84,3 +84,29 @@ func TestConcurrencyLimiter_ReleaseDoesNotGoNegative(t *testing.T) {
 		t.Fatalf("expected active count 0, got %d", l.ActiveCount())
 	}
 }
+
+func TestConcurrencyLimiter_MaxConcurrent(t *testing.T) {
+	tests := []struct {
+		name    string
+		max     int
+		wantMax int
+	}{
+		{name: "limited", max: 5, wantMax: 5},
+		{name: "unlimited (0)", max: 0, wantMax: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewConcurrencyLimiter(tt.max)
+			if got := l.MaxConcurrent(); got != tt.wantMax {
+				t.Errorf("MaxConcurrent() = %d, want %d", got, tt.wantMax)
+			}
+		})
+	}
+}
+
+func TestConcurrencyLimiter_Nil_MaxConcurrent(t *testing.T) {
+	var l *ConcurrencyLimiter
+	if got := l.MaxConcurrent(); got != 0 {
+		t.Errorf("nil MaxConcurrent() = %d, want 0", got)
+	}
+}

@@ -44,19 +44,43 @@ type Orchestrator struct {
 	done            bool // shutdown が完了したかどうか
 	shutdownTimeout time.Duration
 	dispatchWg      sync.WaitGroup
+	projectLabel    string // "owner/repo" 形式のプロジェクト識別子
 }
 
 type retryEntry struct {
-	taskID  string
-	phase   string
-	attempt int
-	timer   *time.Timer
+	taskID     string
+	phase      string
+	attempt    int
+	timer      *time.Timer
+	retryAfter time.Time
+}
+
+// OrchestratorStatus は単一 Orchestrator のスナップショット
+type OrchestratorStatus struct {
+	Project      string
+	RunningTasks []RunningTaskInfo
+	RetryPending []RetryInfo
+}
+
+// RunningTaskInfo は実行中タスクの情報
+type RunningTaskInfo struct {
+	TaskID    string
+	StartedAt time.Time
+}
+
+// RetryInfo はリトライ待ちタスクの情報
+type RetryInfo struct {
+	TaskID     string
+	Phase      string
+	Attempt    int
+	RetryAfter time.Time
 }
 
 // New は新しい Orchestrator を返す。
 // limiter が nil の場合は並行数制限なし。
 // 複数 Orchestrator 間で ConcurrencyLimiter を共有することで、グローバルな並行タスク数制限を実現できる。
-func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logger *slog.Logger, limiter *ConcurrencyLimiter) *Orchestrator {
+// projectLabel は "owner/repo" 形式のプロジェクト識別子で、Status() のレスポンスに含まれる。
+func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logger *slog.Logger, limiter *ConcurrencyLimiter, projectLabel string) *Orchestrator {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -74,6 +98,37 @@ func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logge
 		logger:          logger,
 		retryTimers:     make(map[string]*retryEntry),
 		shutdownTimeout: shutdownTimeout,
+		projectLabel:    projectLabel,
+	}
+}
+
+// Status は現在の状態スナップショットを返す（外部I/Oなし）
+func (o *Orchestrator) Status() OrchestratorStatus {
+	runningMap := o.state.RunningTasksSnapshot()
+	runningTasks := make([]RunningTaskInfo, 0, len(runningMap))
+	for taskID, startedAt := range runningMap {
+		runningTasks = append(runningTasks, RunningTaskInfo{
+			TaskID:    taskID,
+			StartedAt: startedAt,
+		})
+	}
+
+	o.retryMu.Lock()
+	retryPending := make([]RetryInfo, 0, len(o.retryTimers))
+	for _, entry := range o.retryTimers {
+		retryPending = append(retryPending, RetryInfo{
+			TaskID:     entry.taskID,
+			Phase:      entry.phase,
+			Attempt:    entry.attempt,
+			RetryAfter: entry.retryAfter,
+		})
+	}
+	o.retryMu.Unlock()
+
+	return OrchestratorStatus{
+		Project:      o.projectLabel,
+		RunningTasks: runningTasks,
+		RetryPending: retryPending,
 	}
 }
 
@@ -326,10 +381,11 @@ func (o *Orchestrator) scheduleRetry(taskID string, phase string, attempt int, e
 	})
 
 	o.retryTimers[taskID] = &retryEntry{
-		taskID:  taskID,
-		phase:   phase,
-		attempt: attempt,
-		timer:   timer,
+		taskID:     taskID,
+		phase:      phase,
+		attempt:    attempt,
+		timer:      timer,
+		retryAfter: time.Now().Add(delayDuration),
 	}
 }
 

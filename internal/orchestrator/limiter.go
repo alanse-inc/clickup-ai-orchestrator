@@ -45,6 +45,14 @@ func (l *ConcurrencyLimiter) Release() {
 	}
 }
 
+// MaxConcurrent は最大並行数を返す。0 は無制限を示す。
+func (l *ConcurrencyLimiter) MaxConcurrent() int {
+	if l == nil {
+		return 0
+	}
+	return l.maxConcurrent // immutable、ロック不要
+}
+
 // ActiveCount は現在のアクティブ数を返す
 func (l *ConcurrencyLimiter) ActiveCount() int {
 	if l == nil {

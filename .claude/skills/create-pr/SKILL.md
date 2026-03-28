@@ -22,8 +22,9 @@
    <変更内容の要約を箇条書き>
 
    ## Test Plan
+   - [ ] `golangci-lint fmt ./...` でフォーマット済み
+   - [ ] `golangci-lint run ./...` がパスする
    - [ ] `go test ./...` がパスする
-   - [ ] `go vet ./...` がパスする
 
    Closes #<issue-number>
    EOF

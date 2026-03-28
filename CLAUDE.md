@@ -60,6 +60,20 @@ CI では golangci-lint-action が自動でバイナリを取得するため go.
 - テストは *_test.go に記述し、テーブル駆動テストを基本とする
 - ログは構造化ログ（JSON形式、slog.NewJSONHandler）を使用する
 
+## Quality Gate
+
+コミット前に以下を **すべてパス** させること。失敗したままコミットしない:
+
+```bash
+golangci-lint fmt ./...   # フォーマット（自動修正）
+golangci-lint run ./...   # Lint（静的解析）
+go test ./...             # テスト
+```
+
+- `.go` ファイルを編集するたびに `golangci-lint fmt` + `golangci-lint run --fix` が PostToolUse hook で自動実行される
+- `git commit` 実行前に PreToolUse hook が `golangci-lint run` + `go test` を実行し、失敗時はコミットをブロックする
+- CI 環境（GitHub Actions）では hook が使えないため、実装完了前に必ず手動で上記コマンドを実行すること
+
 ## Development Flow
 
 詳細は DEVELOPMENT.md を参照。

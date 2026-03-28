@@ -58,9 +58,13 @@ func (m *mockTaskClient) GetTask(_ context.Context, taskID string) (*clickup.Tas
 	return nil, fmt.Errorf("task not found: %s", taskID)
 }
 
-func (m *mockTaskClient) UpdateTaskStatus(_ context.Context, taskID string, status string) error {
+func (m *mockTaskClient) UpdateTaskStatus(ctx context.Context, taskID string, status string) error {
 	if m.updateDelay > 0 {
-		time.Sleep(m.updateDelay)
+		select {
+		case <-time.After(m.updateDelay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -663,27 +667,20 @@ func TestShutdown_WaitsForDispatch(t *testing.T) {
 }
 
 func TestShutdown_TimeoutForcesStop(t *testing.T) {
-	sm := defaultSM
-	fetcher := &mockTaskClient{
-		taskMap:     map[string]*clickup.Task{},
-		updateDelay: 5 * time.Second, // much longer than shutdown timeout
-	}
+	fetcher := &mockTaskClient{taskMap: map[string]*clickup.Task{}}
 	dispatcher := &mockWorkflowDispatcher{}
 	shutdownTimeout := 100 * time.Millisecond
 	o := New(fetcher, dispatcher, Config{
 		PollInterval:    time.Second,
-		StatusMapping:   sm,
+		StatusMapping:   defaultSM,
 		ShutdownTimeout: shutdownTimeout,
 	}, defaultLogger, nil)
 
-	task := clickup.Task{ID: "task-1", Status: sm.ReadyForSpec}
-
-	go func() {
-		o.dispatch(context.Background(), task, 1)
-	}()
-
-	// Give dispatch time to start
-	time.Sleep(10 * time.Millisecond)
+	// dispatchWg を直接操作して「実行中の dispatch がある」状態をシミュレート
+	// 実際の dispatch goroutine を使わないことで race を回避
+	o.dispatchWg.Add(1)
+	// テスト終了時に Done を呼んで goroutine リークを防ぐ
+	defer o.dispatchWg.Done()
 
 	start := time.Now()
 	o.shutdown()
@@ -692,6 +689,9 @@ func TestShutdown_TimeoutForcesStop(t *testing.T) {
 	// Should have timed out around shutdownTimeout (allow 3x margin)
 	if elapsed > shutdownTimeout*3 {
 		t.Errorf("shutdown took %v, expected around %v", elapsed, shutdownTimeout)
+	}
+	if elapsed < shutdownTimeout/2 {
+		t.Errorf("shutdown returned too early (%v), expected to wait at least ~%v", elapsed, shutdownTimeout)
 	}
 }
 

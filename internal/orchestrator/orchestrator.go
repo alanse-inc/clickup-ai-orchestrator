@@ -181,7 +181,13 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 // dispatch はタスクのディスパッチを行う。attempt はリトライ回数で、失敗時に scheduleRetry に引き継がれる。
 // 並行数上限に達した場合は false を返し、呼び出し元で残りタスクの処理を打ち切れるようにする。
 func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt int) bool {
+	o.retryMu.Lock()
+	if o.done {
+		o.retryMu.Unlock()
+		return true
+	}
 	o.dispatchWg.Add(1)
+	o.retryMu.Unlock()
 	defer o.dispatchWg.Done()
 
 	if !o.state.Claim(task.ID) {

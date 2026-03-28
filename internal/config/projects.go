@@ -20,7 +20,9 @@ type ProjectConfig struct {
 	StatusMapping      clickup.StatusMapping
 }
 
-// rawStatusMappingConfig は YAML パース用の内部構造体
+// rawStatusMappingConfig は YAML パース用の内部構造体。
+// clickup.StatusMapping に yaml タグを直接付与すると clickup パッケージが
+// yaml 依存を持つことになるため、変換用の中間構造体として分離している。
 type rawStatusMappingConfig struct {
 	ReadyForSpec   string `yaml:"ready_for_spec"`
 	GeneratingSpec string `yaml:"generating_spec"`

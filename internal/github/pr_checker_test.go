@@ -356,6 +356,15 @@ func TestIsSpecPRMerged(t *testing.T) {
 			wantSearch:   true,
 		},
 		{
+			name:         "ブランチ 500、フォールバック空",
+			branchStatus: http.StatusInternalServerError,
+			branchBody:   `{"message":"Internal Server Error"}`,
+			searchStatus: http.StatusOK,
+			searchBody:   emptySearchResult,
+			wantErr:      true,
+			wantSearch:   true,
+		},
+		{
 			name:         "ブランチ 500、フォールバックも 500",
 			branchStatus: http.StatusInternalServerError,
 			branchBody:   `{"message":"Internal Server Error"}`,

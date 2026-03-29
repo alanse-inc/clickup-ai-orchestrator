@@ -86,7 +86,7 @@ func loadProjects(path string) ([]ProjectConfig, error) {
 
 		specOutput, err := resolveSpecOutput(p.SpecOutput)
 		if err != nil {
-			return nil, fmt.Errorf("project[%d]: %w", i, err)
+			return nil, fmt.Errorf("project[%d] (%s/%s): %w", i, p.GitHubOwner, p.GitHubRepo, err)
 		}
 
 		sm, err := resolveStatusMapping(p.StatusMapping)
@@ -112,10 +112,11 @@ func resolveSpecOutput(raw string) (string, error) {
 	if raw == "" {
 		return "clickup", nil
 	}
-	if raw != "clickup" && raw != "repo" {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	if normalized != "clickup" && normalized != "repo" {
 		return "", fmt.Errorf("invalid spec_output %q: must be \"clickup\" or \"repo\"", raw)
 	}
-	return raw, nil
+	return normalized, nil
 }
 
 // resolveStatusMapping は rawStatusMappingConfig からデフォルト値を補完した StatusMapping を返す

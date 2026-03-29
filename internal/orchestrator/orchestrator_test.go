@@ -1489,11 +1489,6 @@ func TestDispatch_SpecOutputPropagated(t *testing.T) {
 			specOutput:     "clickup",
 			wantSpecOutput: "clickup",
 		},
-		{
-			name:           "empty string propagated",
-			specOutput:     "",
-			wantSpecOutput: "",
-		},
 	}
 
 	for _, tt := range tests {

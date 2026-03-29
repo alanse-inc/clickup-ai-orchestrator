@@ -55,15 +55,14 @@ func TestLoadProjects_SpecOutput(t *testing.T) {
 			errContains: "invalid spec_output",
 		},
 		{
-			name: "spec_output uppercase Repo is invalid",
+			name: "spec_output uppercase Repo is normalized",
 			yaml: `projects:
   - clickup_list_id: "list-123"
     github_owner: "owner"
     github_repo: "repo"
     spec_output: "Repo"
 `,
-			wantErr:     true,
-			errContains: "invalid spec_output",
+			wantSpecOutput: "repo",
 		},
 	}
 

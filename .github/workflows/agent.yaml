@@ -22,6 +22,11 @@ on:
         description: 'ClickUp status to revert on error'
         required: true
         type: string
+      spec_output:
+        description: 'SPEC output destination: clickup (update ClickUp description) or repo (create spec PR)'
+        required: false
+        type: string
+        default: 'clickup'
 
 jobs:
   agent:
@@ -74,9 +79,9 @@ jobs:
           echo "$RESPONSE" | jq -r '.text_content // ""' >> "$GITHUB_OUTPUT"
           echo "${DELIMITER_TC}" >> "$GITHUB_OUTPUT"
 
-      - name: Run Claude Code (SPEC)
+      - name: Run Claude Code (SPEC - clickup mode)
         id: claude_spec
-        if: inputs.phase == 'SPEC'
+        if: inputs.phase == 'SPEC' && inputs.spec_output != 'repo'
         uses: anthropics/claude-code-action@v1
         with:
           allowed_bots: '*'
@@ -95,6 +100,51 @@ jobs:
             - 実装方針
             - テスト方針
             - 考慮事項・リスク
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Run Claude Code (SPEC - repo mode)
+        id: claude_spec_repo
+        if: inputs.phase == 'SPEC' && inputs.spec_output == 'repo'
+        uses: anthropics/claude-code-action@v1
+        with:
+          allowed_bots: '*'
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": [
+                  "Bash(*)",
+                  "Read(*)",
+                  "Write(*)",
+                  "Edit(*)",
+                  "Glob(*)",
+                  "Grep(*)"
+                ]
+              }
+            }
+          prompt: |
+            以下の ClickUp タスクの内容をもとに、実装仕様書を作成してください。
+            リポジトリの既存コードを読み込み、現在のアーキテクチャ・コーディングスタイルを踏まえて仕様を作成してください。
+
+            タスク名: ${{ steps.fetch_task.outputs.task_name }}
+            タスク内容:
+            ${{ steps.fetch_task.outputs.task_description }}
+
+            実装手順:
+            1. spec/clickup-${{ inputs.task_id }} ブランチを作成
+            2. 仕様書を作成してリポジトリ内にファイルとして配置する。
+               配置先やフォーマットはリポジトリの CLAUDE.md やスキル（/spec 等）の指示に従うこと。
+               特に指示がなければ docs/specs/clickup-${{ inputs.task_id }}.md に作成する。
+            3. 仕様書には以下を含めること:
+               - 変更の概要
+               - 影響を受けるファイル
+               - 実装方針
+               - テスト方針
+               - 考慮事項・リスク
+            4. コミット＆Push
+            5. gh pr create で仕様レビュー用の PR を作成。description の末尾に必ず以下の行を含めること:
+               Refs CU-${{ inputs.task_id }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
 
@@ -140,6 +190,7 @@ jobs:
                Closes CU-${{ inputs.task_id }}
 
             コーディング規約は CLAUDE.md を参照してください。
+            リポジトリ内に仕様書ファイル（docs/specs/ 等）がある場合はそれも参照してください。
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
 
@@ -175,7 +226,7 @@ jobs:
 
       - name: Extract spec from execution output
         id: extract_spec
-        if: success() && inputs.phase == 'SPEC'
+        if: success() && inputs.phase == 'SPEC' && inputs.spec_output != 'repo'
         env:
           EXECUTION_FILE: ${{ steps.claude_spec.outputs.execution_file }}
         run: |
@@ -212,8 +263,8 @@ jobs:
           echo "$SPEC" >> "$GITHUB_OUTPUT"
           echo "${DELIMITER}" >> "$GITHUB_OUTPUT"
 
-      - name: Update ClickUp description (SPEC)
-        if: success() && inputs.phase == 'SPEC'
+      - name: Update ClickUp description (SPEC - clickup mode)
+        if: success() && inputs.phase == 'SPEC' && inputs.spec_output != 'repo'
         continue-on-error: true
         env:
           CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
@@ -241,6 +292,23 @@ jobs:
             -H "Authorization: ${CLICKUP_API_TOKEN}" \
             -H "Content-Type: application/json" \
             -d @-
+
+      - name: Post spec PR link to ClickUp (SPEC - repo mode)
+        if: success() && inputs.phase == 'SPEC' && inputs.spec_output == 'repo'
+        continue-on-error: true
+        env:
+          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          TASK_ID: ${{ inputs.task_id }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr list --head "spec/clickup-${TASK_ID}" --json url --jq '.[0].url')
+          if [ -n "$PR_URL" ]; then
+            curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
+              -X POST "https://api.clickup.com/api/v2/task/${TASK_ID}/comment" \
+              -H "Authorization: ${CLICKUP_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg text "Spec PR created: ${PR_URL}" '{comment_text: $text}')"
+          fi
 
       - name: Record error to ClickUp
         if: failure()

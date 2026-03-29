@@ -428,6 +428,9 @@ func TestDispatch_NormalFlow(t *testing.T) {
 	if call.StatusOnError != sm.ReadyForSpec {
 		t.Errorf("expected error status %s, got %s", sm.ReadyForSpec, call.StatusOnError)
 	}
+	if call.SpecOutput != "" {
+		t.Errorf("expected empty spec output (zero value), got %s", call.SpecOutput)
+	}
 	dispatcher.mu.Unlock()
 
 	// Check state

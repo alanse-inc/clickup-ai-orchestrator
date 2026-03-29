@@ -25,7 +25,10 @@ on:
       spec_output:
         description: 'SPEC output destination: clickup (update ClickUp description) or repo (create spec PR)'
         required: false
-        type: string
+        type: choice
+        options:
+          - clickup
+          - repo
         default: 'clickup'
 
 jobs:
@@ -301,7 +304,11 @@ jobs:
           TASK_ID: ${{ inputs.task_id }}
           GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          PR_URL=$(gh pr list --head "spec/clickup-${TASK_ID}" --json url --jq '.[0].url')
+          # 規定のブランチ名で検索し、見つからなければタスク ID で本文検索にフォールバック
+          PR_URL=$(gh pr list --head "spec/clickup-${TASK_ID}" --json url --jq '.[0].url' 2>/dev/null)
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr list --search "CU-${TASK_ID} in:body" --json url --jq '.[0].url' 2>/dev/null)
+          fi
           if [ -n "$PR_URL" ]; then
             curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
               -X POST "https://api.clickup.com/api/v2/task/${TASK_ID}/comment" \

@@ -82,6 +82,9 @@ func (c *GitHubPRChecker) mergedWithFallback(ctx context.Context, branch, bodyMa
 		return true, nil
 	}
 	if fallbackErr != nil {
+		if branchErr != nil {
+			return false, fmt.Errorf("branch: %w; fallback: %w", branchErr, fallbackErr)
+		}
 		return false, fallbackErr
 	}
 	if branchErr != nil {

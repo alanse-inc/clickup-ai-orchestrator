@@ -19,17 +19,30 @@ func TestTriggerWorkflow(t *testing.T) {
 		phase           string
 		statusOnSuccess string
 		statusOnError   string
+		specOutput      string
 		wantErr         bool
 		errContains     string
 	}{
 		{
-			name:            "success 204",
+			name:            "success 204 clickup mode",
 			statusCode:      http.StatusNoContent,
 			responseBody:    "",
 			taskID:          "task123",
 			phase:           "SPEC",
 			statusOnSuccess: "spec review",
 			statusOnError:   "open",
+			specOutput:      "clickup",
+			wantErr:         false,
+		},
+		{
+			name:            "success 204 repo mode",
+			statusCode:      http.StatusNoContent,
+			responseBody:    "",
+			taskID:          "task123",
+			phase:           "SPEC",
+			statusOnSuccess: "spec review",
+			statusOnError:   "open",
+			specOutput:      "repo",
 			wantErr:         false,
 		},
 		{
@@ -40,6 +53,7 @@ func TestTriggerWorkflow(t *testing.T) {
 			phase:           "CODE",
 			statusOnSuccess: "review",
 			statusOnError:   "spec done",
+			specOutput:      "clickup",
 			wantErr:         true,
 			errContains:     "401",
 		},
@@ -51,6 +65,7 @@ func TestTriggerWorkflow(t *testing.T) {
 			phase:           "SPEC",
 			statusOnSuccess: "spec review",
 			statusOnError:   "open",
+			specOutput:      "clickup",
 			wantErr:         true,
 			errContains:     "Not Found",
 		},
@@ -80,7 +95,7 @@ func TestTriggerWorkflow(t *testing.T) {
 				baseURL: server.URL,
 			}
 
-			err := d.TriggerWorkflow(context.Background(), tt.taskID, tt.phase, tt.statusOnSuccess, tt.statusOnError)
+			err := d.TriggerWorkflow(context.Background(), tt.taskID, tt.phase, tt.statusOnSuccess, tt.statusOnError, tt.specOutput)
 
 			if tt.wantErr {
 				if err == nil {
@@ -139,6 +154,9 @@ func TestTriggerWorkflow(t *testing.T) {
 			}
 			if body.Inputs["status_on_error"] != tt.statusOnError {
 				t.Errorf("status_on_error = %s, want %s", body.Inputs["status_on_error"], tt.statusOnError)
+			}
+			if body.Inputs["spec_output"] != tt.specOutput {
+				t.Errorf("spec_output = %s, want %s", body.Inputs["spec_output"], tt.specOutput)
 			}
 		})
 	}

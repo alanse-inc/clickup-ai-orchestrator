@@ -75,6 +75,7 @@ func main() {
 			PollInterval:    time.Duration(cfg.PollIntervalMS) * time.Millisecond,
 			StatusMapping:   proj.StatusMapping,
 			ShutdownTimeout: time.Duration(cfg.ShutdownTimeoutMS) * time.Millisecond,
+			SpecOutput:      proj.SpecOutput,
 		}
 		orchs[i] = orchestrator.New(clickupClients[i], dispatchers[i], orchCfg, projectLogger, limiter, projectLabel, prCheckers[i])
 	}

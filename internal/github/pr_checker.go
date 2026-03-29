@@ -55,21 +55,39 @@ func NewPRChecker(auth Authenticator, owner, repo string) *GitHubPRChecker {
 // IsFeaturePRMerged はブランチ名規約 feature/clickup-{taskID} で PR を検索し、
 // 見つからなければ PR 本文の "Closes CU-{taskID}" でフォールバック検索する。
 func (c *GitHubPRChecker) IsFeaturePRMerged(ctx context.Context, taskID string) (bool, error) {
-	status, _ := c.isBranchPRMerged(ctx, fmt.Sprintf("feature/clickup-%s", taskID))
-	if status == mergeStatusMerged {
-		return true, nil
-	}
-	return c.isBodySearchMerged(ctx, fmt.Sprintf("Closes CU-%s", taskID))
+	return c.mergedWithFallback(ctx,
+		fmt.Sprintf("feature/clickup-%s", taskID),
+		fmt.Sprintf("Closes CU-%s", taskID))
 }
 
 // IsSpecPRMerged はブランチ名規約 spec/clickup-{taskID} で PR を検索し、
 // 見つからなければ PR 本文の "Refs CU-{taskID}" でフォールバック検索する。
 func (c *GitHubPRChecker) IsSpecPRMerged(ctx context.Context, taskID string) (bool, error) {
-	status, _ := c.isBranchPRMerged(ctx, fmt.Sprintf("spec/clickup-%s", taskID))
+	return c.mergedWithFallback(ctx,
+		fmt.Sprintf("spec/clickup-%s", taskID),
+		fmt.Sprintf("Refs CU-%s", taskID))
+}
+
+// mergedWithFallback はブランチ検索を試み、見つからなければ本文検索にフォールバックする。
+// ブランチ検索がエラーの場合もフォールバックを試みるが、
+// フォールバックでも PR が見つからなければブランチ検索のエラーを返す。
+func (c *GitHubPRChecker) mergedWithFallback(ctx context.Context, branch, bodyMarker string) (bool, error) {
+	status, branchErr := c.isBranchPRMerged(ctx, branch)
 	if status == mergeStatusMerged {
 		return true, nil
 	}
-	return c.isBodySearchMerged(ctx, fmt.Sprintf("Refs CU-%s", taskID))
+
+	merged, fallbackErr := c.isBodySearchMerged(ctx, bodyMarker)
+	if merged {
+		return true, nil
+	}
+	if fallbackErr != nil {
+		return false, fallbackErr
+	}
+	if branchErr != nil {
+		return false, branchErr
+	}
+	return false, nil
 }
 
 // isBranchPRMerged は指定ブランチに対応する PR を検索し、マージ状態を返す。

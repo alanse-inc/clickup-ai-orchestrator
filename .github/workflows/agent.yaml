@@ -197,6 +197,22 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
 
+      - name: Verify spec PR exists (SPEC - repo mode)
+        if: success() && inputs.phase == 'SPEC' && inputs.spec_output == 'repo'
+        env:
+          TASK_ID: ${{ inputs.task_id }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token || secrets.GITHUB_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr list --head "spec/clickup-${TASK_ID}" --json url --jq '.[0].url' 2>/dev/null)
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr list --search "Refs CU-${TASK_ID} in:body" --json url --jq '.[0].url' 2>/dev/null)
+          fi
+          if [ -z "$PR_URL" ]; then
+            echo "::error::Spec PR not found for task ${TASK_ID}. Preventing false status transition."
+            exit 1
+          fi
+          echo "Verified spec PR exists: ${PR_URL}"
+
       - name: Update ClickUp status on success
         if: success()
         env:

@@ -95,6 +95,7 @@ func main() {
 	for i, proj := range cfg.Projects {
 		slog.InfoContext(ctx, "service_started",
 			"poll_interval_ms", proj.PollIntervalMS,
+			"shutdown_timeout_ms", proj.ShutdownTimeoutMS,
 			"clickup_list_id", proj.ClickUpListID,
 			"github_repo", proj.GitHubOwner+"/"+proj.GitHubRepo,
 		)

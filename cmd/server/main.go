@@ -54,7 +54,18 @@ func main() {
 	}
 
 	// 全プロジェクトで共有するグローバル並行数リミッタ
-	limiter := orchestrator.NewConcurrencyLimiter(cfg.MaxConcurrentTasks)
+	// プロジェクト間で最大値を採用する（いずれかが 0 = 無制限なら全体が無制限）
+	maxConcurrent := 0
+	for _, proj := range cfg.Projects {
+		if proj.MaxConcurrentTasks == 0 {
+			maxConcurrent = 0
+			break
+		}
+		if proj.MaxConcurrentTasks > maxConcurrent {
+			maxConcurrent = proj.MaxConcurrentTasks
+		}
+	}
+	limiter := orchestrator.NewConcurrencyLimiter(maxConcurrent)
 
 	dispatchers := make([]*gh.Dispatcher, len(cfg.Projects))
 	for i, proj := range cfg.Projects {
@@ -72,9 +83,9 @@ func main() {
 		projectLabel := proj.GitHubOwner + "/" + proj.GitHubRepo
 		projectLogger := logger.With("project", projectLabel)
 		orchCfg := orchestrator.Config{
-			PollInterval:    time.Duration(cfg.PollIntervalMS) * time.Millisecond,
+			PollInterval:    time.Duration(proj.PollIntervalMS) * time.Millisecond,
 			StatusMapping:   proj.StatusMapping,
-			ShutdownTimeout: time.Duration(cfg.ShutdownTimeoutMS) * time.Millisecond,
+			ShutdownTimeout: time.Duration(proj.ShutdownTimeoutMS) * time.Millisecond,
 			SpecOutput:      proj.SpecOutput,
 		}
 		orchs[i] = orchestrator.New(clickupClients[i], dispatchers[i], orchCfg, projectLogger, limiter, projectLabel, prCheckers[i])
@@ -128,7 +139,7 @@ func main() {
 	var wg sync.WaitGroup
 	for i, proj := range cfg.Projects {
 		slog.InfoContext(ctx, "service_started",
-			"poll_interval_ms", cfg.PollIntervalMS,
+			"poll_interval_ms", proj.PollIntervalMS,
 			"clickup_list_id", proj.ClickUpListID,
 			"github_repo", proj.GitHubOwner+"/"+proj.GitHubRepo,
 		)

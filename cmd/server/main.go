@@ -29,6 +29,9 @@ func main() {
 		slog.Error("config_validation_failed", "error", err)
 		os.Exit(1)
 	}
+	for _, skippedErr := range cfg.SkippedProjectErrors {
+		slog.Error("project_skipped", "error", skippedErr)
+	}
 
 	var githubAuth gh.Authenticator
 	switch cfg.AuthMode {

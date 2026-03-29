@@ -663,7 +663,7 @@ func TestLoadProjects_FromYAML(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			projects, err := loadProjects(tmpFile)
+			projects, _, err := loadProjects(tmpFile)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")

@@ -73,7 +73,7 @@ func TestLoadProjects_SpecOutput(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			projects, err := loadProjects(tmpFile)
+			projects, _, err := loadProjects(tmpFile)
 
 			if tt.wantErr {
 				if err == nil {
@@ -106,6 +106,7 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
 		wantErr      bool
 		errContains  string
 		wantLen      int
+		wantSkipped  int
 		checkProject func(t *testing.T, projects []ProjectConfig)
 	}{
 		{
@@ -118,7 +119,8 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
     github_owner: "org"
     github_repo: ""
 `,
-			wantLen: 1,
+			wantLen:     1,
+			wantSkipped: 1,
 			checkProject: func(t *testing.T, projects []ProjectConfig) {
 				if projects[0].ClickUpListID != "list-1" {
 					t.Errorf("ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-1")
@@ -135,7 +137,8 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
     github_owner: "org"
     github_repo: "repo-b"
 `,
-			wantLen: 1,
+			wantLen:     1,
+			wantSkipped: 1,
 			checkProject: func(t *testing.T, projects []ProjectConfig) {
 				if projects[0].ClickUpListID != "list-2" {
 					t.Errorf("ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-2")
@@ -153,7 +156,8 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
     github_owner: "org"
     github_repo: "repo-b"
 `,
-			wantLen: 1,
+			wantLen:     1,
+			wantSkipped: 1,
 			checkProject: func(t *testing.T, projects []ProjectConfig) {
 				if projects[0].ClickUpListID != "list-2" {
 					t.Errorf("ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-2")
@@ -172,7 +176,8 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
     github_owner: "org"
     github_repo: "repo-b"
 `,
-			wantLen: 1,
+			wantLen:     1,
+			wantSkipped: 1,
 			checkProject: func(t *testing.T, projects []ProjectConfig) {
 				if projects[0].ClickUpListID != "list-2" {
 					t.Errorf("ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-2")
@@ -203,7 +208,8 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
     github_owner: "org"
     github_repo: "repo-c"
 `,
-			wantLen: 2,
+			wantLen:     2,
+			wantSkipped: 1,
 			checkProject: func(t *testing.T, projects []ProjectConfig) {
 				if projects[0].ClickUpListID != "list-1" {
 					t.Errorf("projects[0].ClickUpListID = %q, want %q", projects[0].ClickUpListID, "list-1")
@@ -222,7 +228,7 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			projects, err := loadProjects(tmpFile)
+			projects, skipped, err := loadProjects(tmpFile)
 
 			if tt.wantErr {
 				if err == nil {
@@ -240,6 +246,10 @@ func TestLoadProjects_PartialSkip(t *testing.T) {
 
 			if len(projects) != tt.wantLen {
 				t.Fatalf("len(projects) = %d, want %d", len(projects), tt.wantLen)
+			}
+
+			if len(skipped) != tt.wantSkipped {
+				t.Errorf("len(skipped) = %d, want %d", len(skipped), tt.wantSkipped)
 			}
 
 			if tt.checkProject != nil {

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -49,36 +48,37 @@ type projectsFile struct {
 	Projects []rawProjectConfig `yaml:"projects"`
 }
 
-func loadProjects(path string) ([]ProjectConfig, error) {
+func loadProjects(path string) ([]ProjectConfig, []error, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // パスは環境変数 PROJECTS_FILE またはデフォルト値で制御される
 	if err != nil {
-		return nil, fmt.Errorf("reading projects file: %w", err)
+		return nil, nil, fmt.Errorf("reading projects file: %w", err)
 	}
 
 	var pf projectsFile
 	if err := yaml.Unmarshal(data, &pf); err != nil {
-		return nil, fmt.Errorf("parsing projects file: %w", err)
+		return nil, nil, fmt.Errorf("parsing projects file: %w", err)
 	}
 
 	if len(pf.Projects) == 0 {
-		return nil, fmt.Errorf("projects file must contain at least one project")
+		return nil, nil, fmt.Errorf("projects file must contain at least one project")
 	}
 
 	var projects []ProjectConfig
+	var skipped []error
 	for i, p := range pf.Projects {
 		project, err := buildProjectConfig(i, p)
 		if err != nil {
-			slog.Error("project_skipped", "project_index", i, "error", err)
+			skipped = append(skipped, err)
 			continue
 		}
 		projects = append(projects, project)
 	}
 
 	if len(projects) == 0 {
-		return nil, fmt.Errorf("no valid projects found in projects file")
+		return nil, skipped, fmt.Errorf("no valid projects found in projects file")
 	}
 
-	return projects, nil
+	return projects, skipped, nil
 }
 
 // buildProjectConfig は rawProjectConfig をバリデートして ProjectConfig を返す。

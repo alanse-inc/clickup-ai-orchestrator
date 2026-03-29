@@ -122,7 +122,7 @@ func TestIsFeaturePRMerged_BranchSearch(t *testing.T) {
 			branchBody:   `{"message":"Internal Server Error"}`,
 			searchStatus: http.StatusOK,
 			searchBody:   emptySearchResult,
-			want:         false,
+			wantErr:      true,
 			wantSearch:   true,
 		},
 		{
@@ -158,6 +158,9 @@ func TestIsFeaturePRMerged_BranchSearch(t *testing.T) {
 
 			got, err := c.IsFeaturePRMerged(context.Background(), "task123")
 
+			if ts.searchCalled != tt.wantSearch {
+				t.Errorf("search called = %v, want %v", ts.searchCalled, tt.wantSearch)
+			}
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -169,9 +172,6 @@ func TestIsFeaturePRMerged_BranchSearch(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("IsFeaturePRMerged() = %v, want %v", got, tt.want)
-			}
-			if ts.searchCalled != tt.wantSearch {
-				t.Errorf("search called = %v, want %v", ts.searchCalled, tt.wantSearch)
 			}
 		})
 	}
@@ -279,10 +279,10 @@ func TestIsFeaturePRMerged_InvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	// ブランチ検索が不正 JSON → エラー → フォールバックへ
-	// フォールバックは空 → false
+	// フォールバックは空 → ブランチ検索のエラーを返す
 	got, err := c.IsFeaturePRMerged(context.Background(), "task789")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatal("expected error when branch returns invalid JSON and fallback is empty")
 	}
 	if got {
 		t.Error("expected false when branch returns invalid JSON and fallback is empty")
@@ -356,6 +356,15 @@ func TestIsSpecPRMerged(t *testing.T) {
 			wantSearch:   true,
 		},
 		{
+			name:         "ブランチ 500、フォールバック空",
+			branchStatus: http.StatusInternalServerError,
+			branchBody:   `{"message":"Internal Server Error"}`,
+			searchStatus: http.StatusOK,
+			searchBody:   emptySearchResult,
+			wantErr:      true,
+			wantSearch:   true,
+		},
+		{
 			name:         "ブランチ 500、フォールバックも 500",
 			branchStatus: http.StatusInternalServerError,
 			branchBody:   `{"message":"Internal Server Error"}`,
@@ -379,6 +388,9 @@ func TestIsSpecPRMerged(t *testing.T) {
 
 			got, err := c.IsSpecPRMerged(context.Background(), "task123")
 
+			if ts.searchCalled != tt.wantSearch {
+				t.Errorf("search called = %v, want %v", ts.searchCalled, tt.wantSearch)
+			}
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -390,9 +402,6 @@ func TestIsSpecPRMerged(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("IsSpecPRMerged() = %v, want %v", got, tt.want)
-			}
-			if ts.searchCalled != tt.wantSearch {
-				t.Errorf("search called = %v, want %v", ts.searchCalled, tt.wantSearch)
 			}
 		})
 	}

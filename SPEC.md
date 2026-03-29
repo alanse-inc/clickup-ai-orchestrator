@@ -259,7 +259,7 @@ projects:
     # poll_interval_ms, max_concurrent_tasks, shutdown_timeout_ms, status_mapping を省略するとデフォルト値が使われる
 ```
 
-プロジェクトごとに独立した goroutine でポーリングを実行する。`max_concurrent_tasks` はプロジェクトごとに設定でき、全プロジェクト合算のグローバル上限として機能する（いずれかのプロジェクトが `0` = 無制限の場合、全体が無制限になる）。
+プロジェクトごとに独立した goroutine でポーリングを実行する。`max_concurrent_tasks` はプロジェクトごとに独立した並行タスク数上限として機能する（`0` = 無制限）。
 
 各プロジェクトは `status_mapping` セクションで ClickUp ステータス名をカスタマイズできる。省略したフィールドはデフォルト値（Section 5.1 のステータス名を小文字化したもの）が使われる。
 

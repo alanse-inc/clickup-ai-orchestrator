@@ -53,19 +53,11 @@ func main() {
 		}
 	}
 
-	// 全プロジェクトで共有するグローバル並行数リミッタ
-	// プロジェクト間で最大値を採用する（いずれかが 0 = 無制限なら全体が無制限）
-	maxConcurrent := 0
-	for _, proj := range cfg.Projects {
-		if proj.MaxConcurrentTasks == 0 {
-			maxConcurrent = 0
-			break
-		}
-		if proj.MaxConcurrentTasks > maxConcurrent {
-			maxConcurrent = proj.MaxConcurrentTasks
-		}
+	// プロジェクトごとの並行数リミッタ
+	limiters := make([]*orchestrator.ConcurrencyLimiter, len(cfg.Projects))
+	for i, proj := range cfg.Projects {
+		limiters[i] = orchestrator.NewConcurrencyLimiter(proj.MaxConcurrentTasks)
 	}
-	limiter := orchestrator.NewConcurrencyLimiter(maxConcurrent)
 
 	dispatchers := make([]*gh.Dispatcher, len(cfg.Projects))
 	for i, proj := range cfg.Projects {
@@ -88,7 +80,7 @@ func main() {
 			ShutdownTimeout: time.Duration(proj.ShutdownTimeoutMS) * time.Millisecond,
 			SpecOutput:      proj.SpecOutput,
 		}
-		orchs[i] = orchestrator.New(clickupClients[i], dispatchers[i], orchCfg, projectLogger, limiter, projectLabel, prCheckers[i])
+		orchs[i] = orchestrator.New(clickupClients[i], dispatchers[i], orchCfg, projectLogger, limiters[i], projectLabel, prCheckers[i])
 	}
 
 	port := os.Getenv("PORT")
@@ -105,11 +97,13 @@ func main() {
 		}
 	}
 	statusProviders := make([]status.StatusProvider, len(orchs))
+	limiterStatuses := make([]status.LimiterStatus, len(orchs))
 	for i, o := range orchs {
 		statusProviders[i] = o
+		limiterStatuses[i] = limiters[i]
 	}
 	mux.Handle("GET /health", health.NewHandler(pingers))
-	mux.Handle("GET /status", status.NewHandler(limiter, statusProviders))
+	mux.Handle("GET /status", status.NewHandler(limiterStatuses, statusProviders))
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,

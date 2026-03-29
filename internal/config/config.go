@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -36,13 +35,6 @@ func Load() (*Config, error) {
 	// GitHub 認証: PAT と App は排他
 	if err := loadGitHubAuth(cfg); err != nil {
 		return nil, err
-	}
-
-	// 廃止された環境変数が設定されていれば警告を出す
-	for _, deprecated := range []string{"POLL_INTERVAL_MS", "MAX_CONCURRENT_TASKS", "SHUTDOWN_TIMEOUT_MS"} {
-		if os.Getenv(deprecated) != "" {
-			slog.Warn("deprecated_env_ignored", "env", deprecated, "hint", "set in projects.yaml instead")
-		}
 	}
 
 	// プロジェクト設定の読み込み

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/alanse-inc/clickup-ai-orchestrator/compare/v1.3.0...v1.4.0) (2026-03-29)
+
+
+### Features
+
+* manage ClickUp statuses per project via YAML config ([#85](https://github.com/alanse-inc/clickup-ai-orchestrator/issues/85)) ([301516b](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/301516bc3d1e8e8ca630e73cc12d11a7a69cf71a))
+* self-develop スキルを追加 ([#89](https://github.com/alanse-inc/clickup-ai-orchestrator/issues/89)) ([02a650b](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/02a650b9db984eb23e19c3bbae09f44db51e34d1))
+* SPEC フェーズのリポジトリベース出力モード対応 ([#88](https://github.com/alanse-inc/clickup-ai-orchestrator/issues/88)) ([db8b45d](https://github.com/alanse-inc/clickup-ai-orchestrator/commit/db8b45dc470680d0fa2567e6a42f8e99b0adc486))
+
 ## [1.3.0](https://github.com/alanse-inc/clickup-ai-orchestrator/compare/v1.2.0...v1.3.0) (2026-03-28)
 
 

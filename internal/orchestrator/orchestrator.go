@@ -19,7 +19,7 @@ type TaskClient interface {
 
 // WorkflowDispatcher は GitHub Actions をトリガーするインターフェース
 type WorkflowDispatcher interface {
-	TriggerWorkflow(ctx context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string) error
+	TriggerWorkflow(ctx context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string, specOutput string) error
 }
 
 // PRChecker は GitHub PR のマージ状態を確認するインターフェース
@@ -32,6 +32,7 @@ type Config struct {
 	PollInterval    time.Duration
 	StatusMapping   clickup.StatusMapping
 	ShutdownTimeout time.Duration // デフォルト: 30s
+	SpecOutput      string        // "clickup" (default) or "repo"
 }
 
 // Orchestrator はポーリングループとディスパッチロジックを管理する
@@ -43,6 +44,7 @@ type Orchestrator struct {
 	limiter         *ConcurrencyLimiter
 	pollInterval    time.Duration
 	statusMapping   clickup.StatusMapping
+	specOutput      string // "clickup" or "repo"
 	logger          *slog.Logger
 	retryTimers     map[string]*retryEntry
 	retryMu         sync.Mutex
@@ -107,6 +109,7 @@ func New(taskClient TaskClient, dispatcher WorkflowDispatcher, cfg Config, logge
 		retryTimers:     make(map[string]*retryEntry),
 		shutdownTimeout: shutdownTimeout,
 		projectLabel:    projectLabel,
+		specOutput:      cfg.SpecOutput,
 	}
 }
 
@@ -345,7 +348,7 @@ func (o *Orchestrator) dispatch(ctx context.Context, task clickup.Task, attempt 
 
 	successStatus := o.statusMapping.SuccessStatusFor(phase)
 	errorStatus := o.statusMapping.ErrorStatusFor(phase)
-	if err := o.dispatcher.TriggerWorkflow(ctx, task.ID, phaseStr, successStatus, errorStatus); err != nil {
+	if err := o.dispatcher.TriggerWorkflow(ctx, task.ID, phaseStr, successStatus, errorStatus, o.specOutput); err != nil {
 		tl.Error("failed to trigger workflow", "error", err)
 		// ベストエフォートでステータスを元に戻す
 		if revertErr := o.taskClient.UpdateTaskStatus(ctx, task.ID, errorStatus); revertErr != nil {

@@ -18,6 +18,7 @@ type ProjectConfig struct {
 	GitHubRepo         string
 	GitHubWorkflowFile string
 	StatusMapping      clickup.StatusMapping
+	SpecOutput         string // "clickup" (default) or "repo"
 }
 
 // rawStatusMappingConfig は YAML パース用の内部構造体。
@@ -40,6 +41,7 @@ type rawProjectConfig struct {
 	GitHubRepo         string                  `yaml:"github_repo"`
 	GitHubWorkflowFile string                  `yaml:"github_workflow_file"`
 	StatusMapping      *rawStatusMappingConfig `yaml:"status_mapping"`
+	SpecOutput         string                  `yaml:"spec_output"` // "clickup" (default) or "repo"
 }
 
 type projectsFile struct {
@@ -82,6 +84,11 @@ func loadProjects(path string) ([]ProjectConfig, error) {
 			workflowFile = defaultWorkflowFile
 		}
 
+		specOutput, err := resolveSpecOutput(p.SpecOutput)
+		if err != nil {
+			return nil, fmt.Errorf("project[%d] (%s/%s): %w", i, p.GitHubOwner, p.GitHubRepo, err)
+		}
+
 		sm, err := resolveStatusMapping(p.StatusMapping)
 		if err != nil {
 			return nil, fmt.Errorf("project[%d] (%s/%s): invalid status_mapping: %w", i, p.GitHubOwner, p.GitHubRepo, err)
@@ -93,10 +100,23 @@ func loadProjects(path string) ([]ProjectConfig, error) {
 			GitHubRepo:         p.GitHubRepo,
 			GitHubWorkflowFile: workflowFile,
 			StatusMapping:      sm,
+			SpecOutput:         specOutput,
 		}
 	}
 
 	return projects, nil
+}
+
+// resolveSpecOutput は spec_output フィールドのデフォルト補完とバリデーションを行う
+func resolveSpecOutput(raw string) (string, error) {
+	if raw == "" {
+		return "clickup", nil
+	}
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	if normalized != "clickup" && normalized != "repo" {
+		return "", fmt.Errorf("invalid spec_output %q: must be \"clickup\" or \"repo\"", raw)
+	}
+	return normalized, nil
 }
 
 // resolveStatusMapping は rawStatusMappingConfig からデフォルト値を補完した StatusMapping を返す

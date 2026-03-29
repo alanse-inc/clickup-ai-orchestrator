@@ -92,9 +92,10 @@ type triggerCall struct {
 	Phase           string
 	StatusOnSuccess string
 	StatusOnError   string
+	SpecOutput      string
 }
 
-func (m *mockWorkflowDispatcher) TriggerWorkflow(_ context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string) error {
+func (m *mockWorkflowDispatcher) TriggerWorkflow(_ context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string, specOutput string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.triggerCalls = append(m.triggerCalls, triggerCall{
@@ -102,6 +103,7 @@ func (m *mockWorkflowDispatcher) TriggerWorkflow(_ context.Context, taskID strin
 		Phase:           phase,
 		StatusOnSuccess: statusOnSuccess,
 		StatusOnError:   statusOnError,
+		SpecOutput:      specOutput,
 	})
 	return m.triggerErr
 }
@@ -425,6 +427,9 @@ func TestDispatch_NormalFlow(t *testing.T) {
 	}
 	if call.StatusOnError != sm.ReadyForSpec {
 		t.Errorf("expected error status %s, got %s", sm.ReadyForSpec, call.StatusOnError)
+	}
+	if call.SpecOutput != "" {
+		t.Errorf("expected empty spec output (zero value), got %s", call.SpecOutput)
 	}
 	dispatcher.mu.Unlock()
 
@@ -1468,5 +1473,55 @@ func TestMultiProjectSharedLimiter(t *testing.T) {
 	// release() is deferred until reconcile(), so slots remain active after tick completes.
 	if got := limiter.ActiveCount(); got != maxConcurrent {
 		t.Errorf("expected limiter active=%d, got %d", maxConcurrent, got)
+	}
+}
+
+func TestDispatch_SpecOutputPropagated(t *testing.T) {
+	tests := []struct {
+		name           string
+		specOutput     string
+		wantSpecOutput string
+	}{
+		{
+			name:           "repo mode propagated",
+			specOutput:     "repo",
+			wantSpecOutput: "repo",
+		},
+		{
+			name:           "clickup mode propagated",
+			specOutput:     "clickup",
+			wantSpecOutput: "clickup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := defaultSM
+			fetcher := &mockTaskClient{
+				tasks: []clickup.Task{
+					{ID: "task-1", Status: sm.ReadyForSpec},
+				},
+				taskMap: map[string]*clickup.Task{},
+			}
+			dispatcher := &mockWorkflowDispatcher{}
+			o := New(fetcher, dispatcher, Config{
+				PollInterval:  time.Second,
+				StatusMapping: sm,
+				SpecOutput:    tt.specOutput,
+			}, defaultLogger, nil, "", nil)
+
+			o.tick(context.Background())
+
+			dispatcher.mu.Lock()
+			calls := dispatcher.triggerCalls
+			dispatcher.mu.Unlock()
+
+			if len(calls) != 1 {
+				t.Fatalf("expected 1 trigger call, got %d", len(calls))
+			}
+			if calls[0].SpecOutput != tt.wantSpecOutput {
+				t.Errorf("SpecOutput = %q, want %q", calls[0].SpecOutput, tt.wantSpecOutput)
+			}
+		})
 	}
 }

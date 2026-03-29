@@ -67,7 +67,8 @@ type dispatchRequest struct {
 
 // TriggerWorkflow は指定したタスクのフェーズに対応する GitHub Actions ワークフローをトリガーする。
 // statusOnSuccess と statusOnError はワークフロー完了後に設定されるステータスとして inputs に渡される。
-func (d *Dispatcher) TriggerWorkflow(ctx context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string) error {
+// specOutput は SPEC フェーズの出力先（"clickup" または "repo"）を指定する。
+func (d *Dispatcher) TriggerWorkflow(ctx context.Context, taskID string, phase string, statusOnSuccess string, statusOnError string, specOutput string) error {
 	url := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%s/dispatches",
 		githubAPIBase, d.owner, d.repo, d.workflowFile)
 
@@ -78,6 +79,7 @@ func (d *Dispatcher) TriggerWorkflow(ctx context.Context, taskID string, phase s
 			"phase":             phase,
 			"status_on_success": statusOnSuccess,
 			"status_on_error":   statusOnError,
+			"spec_output":       specOutput,
 		},
 	}
 

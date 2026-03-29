@@ -34,7 +34,18 @@ func NewPRChecker(auth Authenticator, owner, repo string) *GitHubPRChecker {
 // マージ済みの PR が存在する場合に true を返す。
 // PR が存在しない場合や全て未マージの場合は false, nil を返す。
 func (c *GitHubPRChecker) IsPRMerged(ctx context.Context, taskID string) (bool, error) {
-	branch := fmt.Sprintf("feature/clickup-%s", taskID)
+	return c.isBranchPRMerged(ctx, fmt.Sprintf("feature/clickup-%s", taskID))
+}
+
+// IsSpecPRMerged はブランチ名規約 spec/clickup-{taskID} を利用して対応する PR を検索し、
+// マージ済みの PR が存在する場合に true を返す。
+// PR が存在しない場合や全て未マージの場合は false, nil を返す。
+func (c *GitHubPRChecker) IsSpecPRMerged(ctx context.Context, taskID string) (bool, error) {
+	return c.isBranchPRMerged(ctx, fmt.Sprintf("spec/clickup-%s", taskID))
+}
+
+// isBranchPRMerged は指定ブランチに対応する PR を検索し、マージ済みなら true を返す。
+func (c *GitHubPRChecker) isBranchPRMerged(ctx context.Context, branch string) (bool, error) {
 	url := fmt.Sprintf("%s/repos/%s/%s/pulls?head=%s:%s&state=all",
 		githubAPIBase, c.owner, c.repo, c.owner, branch)
 

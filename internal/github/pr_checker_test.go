@@ -183,3 +183,82 @@ func TestIsPRMerged_InvalidJSON(t *testing.T) {
 		t.Errorf("error %q does not contain 'decoding response'", err.Error())
 	}
 }
+
+func TestIsSpecPRMerged(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		want       bool
+		wantErr    bool
+		wantHead   string
+	}{
+		{
+			name:       "マージ済み SPEC PR が存在する",
+			statusCode: http.StatusOK,
+			body:       `[{"merged_at":"2024-01-01T00:00:00Z"}]`,
+			want:       true,
+			wantHead:   "test-owner:spec/clickup-task123",
+		},
+		{
+			name:       "未マージ SPEC PR が存在する",
+			statusCode: http.StatusOK,
+			body:       `[{"merged_at":null}]`,
+			want:       false,
+			wantHead:   "test-owner:spec/clickup-task123",
+		},
+		{
+			name:       "SPEC PR が存在しない",
+			statusCode: http.StatusOK,
+			body:       `[]`,
+			want:       false,
+			wantHead:   "test-owner:spec/clickup-task123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedReq *http.Request
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedReq = r
+				w.WriteHeader(tt.statusCode)
+				if tt.body != "" {
+					_, _ = w.Write([]byte(tt.body))
+				}
+			}))
+			defer server.Close()
+
+			c := NewPRChecker(NewPATAuthenticator("test-token"), "test-owner", "test-repo")
+			c.httpClient = server.Client()
+			c.httpClient.Transport = &rewriteTransport{
+				base:    http.DefaultTransport,
+				baseURL: server.URL,
+			}
+
+			got, err := c.IsSpecPRMerged(context.Background(), "task123")
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if got != tt.want {
+				t.Errorf("IsSpecPRMerged() = %v, want %v", got, tt.want)
+			}
+
+			if capturedReq == nil {
+				t.Fatal("expected request to be captured")
+			}
+			if got := capturedReq.URL.Query().Get("head"); got != tt.wantHead {
+				t.Errorf("head param = %s, want %s", got, tt.wantHead)
+			}
+		})
+	}
+}

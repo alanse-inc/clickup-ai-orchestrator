@@ -25,6 +25,7 @@ type WorkflowDispatcher interface {
 // PRChecker は GitHub PR のマージ状態を確認するインターフェース
 type PRChecker interface {
 	IsPRMerged(ctx context.Context, taskID string) (bool, error)
+	IsSpecPRMerged(ctx context.Context, taskID string) (bool, error)
 }
 
 // Config は Orchestrator の設定を保持する
@@ -282,6 +283,30 @@ func (o *Orchestrator) reconcile(ctx context.Context) {
 					continue
 				}
 				o.logger.Info("pr merged, task closed", "task_id", taskID)
+				o.release(taskID)
+				continue
+			}
+			// 未マージ: 処理中として維持
+			continue
+		}
+
+		// Spec Review ステータスかつ PRChecker が有効な場合、SPEC PR のマージ状態を確認する。
+		// SPEC PR がマージされていれば "ready for code" へ遷移する。
+		// prChecker == nil の場合は従来通り「処理中でも終端でもない → release」パスを通る。
+		if o.prChecker != nil && task.Status == o.statusMapping.SpecReview {
+			merged, err := o.prChecker.IsSpecPRMerged(ctx, taskID)
+			if err != nil {
+				o.logger.Warn("failed to check spec PR merge status, skipping",
+					"task_id", taskID, "error", err)
+				continue
+			}
+			if merged {
+				if err := o.taskClient.UpdateTaskStatus(ctx, taskID, o.statusMapping.ReadyForCode); err != nil {
+					o.logger.Error("failed to update task to ready for code",
+						"task_id", taskID, "error", err)
+					continue
+				}
+				o.logger.Info("spec pr merged, task ready for code", "task_id", taskID)
 				o.release(taskID)
 				continue
 			}

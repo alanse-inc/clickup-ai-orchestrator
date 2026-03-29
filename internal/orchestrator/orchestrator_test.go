@@ -110,13 +110,16 @@ func (m *mockWorkflowDispatcher) TriggerWorkflow(_ context.Context, taskID strin
 
 // mockPRChecker は PRChecker のモック
 type mockPRChecker struct {
-	mu     sync.Mutex
-	merged map[string]bool
-	err    error
-	calls  []string
+	mu         sync.Mutex
+	merged     map[string]bool
+	specMerged map[string]bool
+	err        error
+	specErr    error
+	calls      []string
+	specCalls  []string
 }
 
-func (m *mockPRChecker) IsPRMerged(_ context.Context, taskID string) (bool, error) {
+func (m *mockPRChecker) IsFeaturePRMerged(_ context.Context, taskID string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = append(m.calls, taskID)
@@ -124,6 +127,16 @@ func (m *mockPRChecker) IsPRMerged(_ context.Context, taskID string) (bool, erro
 		return false, m.err
 	}
 	return m.merged[taskID], nil
+}
+
+func (m *mockPRChecker) IsSpecPRMerged(_ context.Context, taskID string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.specCalls = append(m.specCalls, taskID)
+	if m.specErr != nil {
+		return false, m.specErr
+	}
+	return m.specMerged[taskID], nil
 }
 
 func TestNew_NilLoggerFallback(t *testing.T) {
@@ -383,6 +396,107 @@ func TestReconcile_PRMerge(t *testing.T) {
 				fetcher.mu.Unlock()
 				if gotStatus != sm.Closed {
 					t.Errorf("UpdateTaskStatus called with status %q, want %q", gotStatus, sm.Closed)
+				}
+			}
+		})
+	}
+}
+
+func TestReconcile_SpecPRMerge(t *testing.T) {
+	sm := defaultSM
+
+	tests := []struct {
+		name              string
+		specPRMerged      bool
+		specPRCheckerErr  error
+		updateErr         error
+		prCheckerNil      bool
+		expectReleased    bool
+		expectUpdateCalls int
+		expectStatus      string
+	}{
+		{
+			name:              "SPEC PR マージ済み: ready for code に更新してリリース",
+			specPRMerged:      true,
+			expectReleased:    true,
+			expectUpdateCalls: 1,
+			expectStatus:      sm.ReadyForCode,
+		},
+		{
+			name:              "SPEC PR 未マージ: 処理中として維持",
+			specPRMerged:      false,
+			expectReleased:    false,
+			expectUpdateCalls: 0,
+		},
+		{
+			name:              "IsSpecPRMerged エラー: スキップして維持",
+			specPRCheckerErr:  fmt.Errorf("api error"),
+			expectReleased:    false,
+			expectUpdateCalls: 0,
+		},
+		{
+			name:              "UpdateTaskStatus エラー: 維持",
+			specPRMerged:      true,
+			updateErr:         fmt.Errorf("update error"),
+			expectReleased:    false,
+			expectUpdateCalls: 1,
+		},
+		{
+			name:              "prChecker == nil: 既存の reconciliation_release",
+			prCheckerNil:      true,
+			expectReleased:    true,
+			expectUpdateCalls: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			taskID := "task-spec-1"
+			fetcher := &mockTaskClient{
+				taskMap: map[string]*clickup.Task{
+					taskID: {ID: taskID, Status: sm.SpecReview},
+				},
+				updateErr: tt.updateErr,
+			}
+			dispatcher := &mockWorkflowDispatcher{}
+
+			var prChecker PRChecker
+			if !tt.prCheckerNil {
+				prChecker = &mockPRChecker{
+					specMerged: map[string]bool{taskID: tt.specPRMerged},
+					specErr:    tt.specPRCheckerErr,
+				}
+			}
+
+			o := New(fetcher, dispatcher, Config{PollInterval: time.Second, StatusMapping: sm}, defaultLogger, nil, "", prChecker)
+			o.state.Claim(taskID)
+			o.state.MarkRunning(taskID)
+
+			o.reconcile(context.Background())
+
+			if tt.expectReleased {
+				if o.state.IsClaimedOrRunning(taskID) {
+					t.Errorf("expected task %s to be released", taskID)
+				}
+			} else {
+				if !o.state.IsClaimedOrRunning(taskID) {
+					t.Errorf("expected task %s to remain running", taskID)
+				}
+			}
+
+			fetcher.mu.Lock()
+			updateCount := len(fetcher.updateCalls)
+			fetcher.mu.Unlock()
+			if updateCount != tt.expectUpdateCalls {
+				t.Errorf("UpdateTaskStatus called %d times, want %d", updateCount, tt.expectUpdateCalls)
+			}
+
+			if updateCount > 0 && tt.expectStatus != "" {
+				fetcher.mu.Lock()
+				gotStatus := fetcher.updateCalls[0].Status
+				fetcher.mu.Unlock()
+				if gotStatus != tt.expectStatus {
+					t.Errorf("UpdateTaskStatus called with status %q, want %q", gotStatus, tt.expectStatus)
 				}
 			}
 		})

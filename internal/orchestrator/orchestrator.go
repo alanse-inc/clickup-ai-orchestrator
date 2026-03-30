@@ -431,7 +431,7 @@ func calcRetryDelay(attempt int) time.Duration {
 // 結果は retryMaxDelayMS でクリップされる。
 func addJitter(base time.Duration) time.Duration {
 	// [0.75, 1.25) の範囲でスケーリング
-	factor := 0.75 + rand.Float64()*0.5
+	factor := 0.75 + rand.Float64()*0.5 //nolint:gosec // G404: jitter 用途であり暗号論的安全性は不要
 	result := time.Duration(float64(base) * factor)
 	if max := time.Duration(retryMaxDelayMS) * time.Millisecond; result > max {
 		return max

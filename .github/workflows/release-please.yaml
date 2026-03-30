@@ -60,3 +60,34 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [release-please, docker]
+    if: ${{ needs.release-please.outputs.release_created && needs.docker.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+          owner: alanse-inc
+          repositories: clickup-ai-orchestrator-deployment
+
+      - name: Trigger deploy workflow
+        uses: actions/github-script@v7
+        env:
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'alanse-inc',
+              repo: 'clickup-ai-orchestrator-deployment',
+              event_type: 'deploy',
+              client_payload: {
+                tag: process.env.TAG_NAME
+              }
+            });

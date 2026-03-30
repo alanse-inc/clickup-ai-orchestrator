@@ -65,6 +65,7 @@ jobs:
     needs: [release-please, docker]
     if: ${{ needs.release-please.outputs.release_created && needs.docker.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Generate GitHub App token
         id: app-token
